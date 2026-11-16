@@ -1,0 +1,49 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    networks:
+      - rummy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 2s
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - "${RUMMY_PORT:-8080}:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - rummy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 2s
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles:
+      - internet
+    command: ["tunnel", "--no-autoupdate", "--url", "http://client:80"]
+    depends_on:
+      client:
+        condition: service_healthy
+    networks:
+      - rummy
+
+networks:
+  rummy:
+    driver: bridge
