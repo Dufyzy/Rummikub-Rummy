@@ -18,6 +18,7 @@ function fixture(rack: Tile[], table: Meld[] = [], opened = false): Game {
     pool: [],
     table,
     turn: 1,
+    dealEndsAt: 0,
     current: 0,
     emptyPasses: 0,
     end: null,
@@ -104,7 +105,7 @@ test('a committed joker requires an exact replacement and must finish in another
   const game = fixture([blue10, red10, red11], [boundRun], true)
   const swap = { tile: blue10.id, to: 1, anchor: joker.id }
   assert.match(errorOf(confirmTurn(game, [{ tile: joker.id, to: 'new' }])), /Sustituye/)
-  assert.match(errorOf(confirmTurn(game, [{ ...swap, tile: red10.id }, { tile: joker.id, to: 'new' }])), /Sustituye/)
+  assert.match(errorOf(confirmTurn(game, [{ ...swap, tile: red10.id }, { tile: joker.id, to: 'new' }])), /no encaja/)
   assert.match(errorOf(confirmTurn(game, [swap])), /Grupo 2/)
   const result = confirmTurn(game, [swap, { tile: red10.id, to: 2 }, { tile: red11.id, to: 2 }])
   assert.ok(result.ok)
@@ -127,6 +128,49 @@ test('opened players can split and extend groups with a tile from their rack', (
   assert.ok(result.ok)
   assert.deepEqual(result.data.table.map(group => group.tiles.map(item => item.value)), [[1, 2, 3], [3, 4, 5]])
   assert.deepEqual(result.data.players[0].rack, [spare])
+})
+
+test('a group rejects incompatible additions immediately without changing the draft', () => {
+  const run = [3, 4, 5].map(value => tile('red', value))
+  const red6 = tile('red', 6)
+  const red7 = tile('red', 7)
+  const blue6 = tile('blue', 6)
+  const game = fixture([red6, red7, blue6], [{ id: 1, tiles: run, jokers: {} }], true)
+  for (const item of [blue6, red7]) {
+    const rejected = confirmTurn(game, [{ tile: item.id, to: 1 }])
+    assert.ok(!rejected.ok)
+    assert.deepEqual(rejected.error, { message: 'Esa ficha no encaja en el grupo 1.', groupId: 1 })
+    assert.deepEqual(game.table[0].tiles, run)
+  }
+  assert.ok(confirmTurn(game, [{ tile: red6.id, to: 1 }, { tile: red7.id, to: 1 }]).ok)
+})
+
+test('an incomplete run can be assembled around a gap but rejects an incompatible partial placement', () => {
+  const [four, five, six] = [4, 5, 6].map(value => tile('black', value))
+  const game = fixture([four, five, six, spare], [], true)
+  const partial: Move[] = [{ tile: four.id, to: 'new' }, { tile: six.id, to: 1 }]
+  assert.match(errorOf(confirmTurn(game, [...partial, { tile: spare.id, to: 1 }])), /no encaja/)
+  const accepted = confirmTurn(game, [...partial, { tile: five.id, to: 1, anchor: six.id, side: 'before' }])
+  assert.ok(accepted.ok)
+  assert.deepEqual(accepted.data.table[0].tiles, [four, five, six])
+})
+
+test('a rack group is placed atomically and its identities and order are validated', () => {
+  const run = [10, 11, 12].map(value => tile('orange', value))
+  const ids = run.map(item => item.id)
+  const game = fixture([...run, spare])
+  const accepted = confirmTurn(game, [{ tiles: ids, to: 'new' }])
+  assert.ok(accepted.ok)
+  assert.deepEqual(accepted.data.table[0].tiles, run)
+  assert.deepEqual(accepted.data.players[0].rack, [spare])
+  assert.match(errorOf(confirmTurn(game, [{ tiles: [ids[0], ids[0], ids[2]], to: 'new' }])), /no está disponible/)
+  assert.match(errorOf(confirmTurn(game, [{ tiles: ids.slice().reverse(), to: 'new' }])), /grupo válido/)
+
+  const onTable = [7, 8, 9].map(value => tile('orange', value))
+  const opened = fixture(run, [{ id: 1, tiles: onTable, jokers: {} }], true)
+  const merged = confirmTurn(opened, [{ tiles: ids, to: 1 }])
+  assert.ok(merged.ok)
+  assert.deepEqual(merged.data.table[0].tiles, [...onTable, ...run])
 })
 
 test('draw ends the turn; a full round of empty-pool passes ranks rack points and preserves ties', () => {

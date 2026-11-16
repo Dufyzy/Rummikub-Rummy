@@ -1,10 +1,14 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, pointerWithin, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
-import type { CollisionDetection, DragEndEvent } from '@dnd-kit/core'
+import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core'
+import { useReducedMotion } from 'framer-motion'
 import { ArrowDownUp, ArrowLeftToLine, Check, CircleAlert, DoorOpen, Layers3, LockKeyhole, Plus, RotateCcw, Trophy } from 'lucide-react'
 import { COLORS } from '../../server/protocol'
 import type { GameView, Meld, Move, PlayerView, Problem, RoomView, Tile as TileData } from '../../server/protocol'
-import { moveTile, startDraft, turnRules } from '../../server/draft'
+import { applyMove, startDraft, turnRules } from '../../server/draft'
+import type { MeldKind } from '../../server/melds'
+import { DealAnimation } from './DealAnimation'
+import { findRackMeld } from './rackMeld'
 import { Avatar, ErrorNotice } from './RoomScreens'
 import { Tile, TileVisual, tileName, type DropTarget } from './Tile'
 
@@ -17,6 +21,9 @@ type MatchProps = {
   onLeave: () => void
   leaveError: Problem | null
 }
+
+const GROUP_HOLD_MS = 460
+const EMPTY_DRAG_GROUP = new Set<string>()
 
 const targetsUnderPointer: CollisionDetection = args => {
   const collisions = pointerWithin(args)
@@ -80,7 +87,7 @@ function BoardSurface({ enabled, children }: { enabled: boolean; children: React
     id: 'board-background', data: { to: 'new' } satisfies DropTarget, disabled: !enabled,
   })
   return (
-    <section ref={setNodeRef} className={`board felt ${isOver ? 'board-drop-hover' : ''}`} aria-label="Mesa de fichas" tabIndex={0}>
+    <section ref={setNodeRef} className={`board felt ${isOver ? 'board-drop-hover' : ''}`} aria-label="Mesa de fichas" data-deal-board tabIndex={0}>
       {children}
     </section>
   )
@@ -98,15 +105,15 @@ function NewGroup({ enabled, selected, onAdd }: { enabled: boolean; selected: bo
   )
 }
 
-function PlayerStrip({ players, current, self }: { players: PlayerView[]; current?: string; self: string }) {
+function PlayerStrip({ players, current, self, dealing }: { players: PlayerView[]; current?: string; self: string; dealing: boolean }) {
   return (
     <ul className="match-players" style={{ '--player-count': players.length } as React.CSSProperties} aria-label="Jugadores">
       {players.map((player, index) => (
-        <li key={player.id} className={`match-player ${player.id === current ? 'player-current' : ''}`}>
+        <li key={player.id} data-deal-seat={player.id} className={`match-player ${player.id === current ? 'player-current' : ''}`}>
           <Avatar name={player.name} index={index} />
           <div className="min-w-0">
             <p className="player-name" title={player.name}>{player.name}{player.id === self && <span className="muted"> (tú)</span>}</p>
-            <span className="player-caption">{player.connected || current === undefined ? `${player.tileCount} fichas` : 'Reconectando…'}</span>
+            <span className="player-caption">{dealing ? 'Repartiendo' : player.connected || current === undefined ? `${player.tileCount} fichas` : 'Reconectando…'}</span>
           </div>
           {player.id === current && <span className="current-dot" title="Turno actual" />}
         </li>
@@ -116,11 +123,13 @@ function PlayerStrip({ players, current, self }: { players: PlayerView[]; curren
 }
 
 function Rack({
-  tiles, selected, editable, onTarget, onSort,
+  tiles, selected, editable, concealed, carried, onTarget, onSort,
 }: {
   tiles: TileData[]
   selected: string | null
   editable: boolean
+  concealed: boolean
+  carried: ReadonlySet<string>
   onTarget: (target: DropTarget) => void
   onSort: (by: 'value' | 'color') => void
 }) {
@@ -144,8 +153,10 @@ function Rack({
           </>}
         </div>
       </div>
-      <div ref={setNodeRef} className={`rack-tray tile-row ${isOver ? 'drop-hover' : ''}`} role="group" aria-label="Fichas del atril" tabIndex={0}>
-        {tiles.map(tile => <Tile key={tile.id} tile={tile} zone="rack" selected={selected === tile.id} editable={editable} onClick={() => onTarget({ to: 'rack', anchor: tile.id })} />)}
+      <div ref={setNodeRef} className={`rack-tray tile-row ${isOver ? 'drop-hover' : ''}`} role="group" aria-label="Fichas del atril"
+        data-deal-rack aria-hidden={concealed || undefined} tabIndex={concealed ? -1 : 0}>
+        {tiles.map(tile => <Tile key={tile.id} tile={tile} zone="rack" selected={selected === tile.id} editable={editable}
+          movingWithGroup={carried.has(tile.id)} onClick={() => onTarget({ to: 'rack', anchor: tile.id })} />)}
       </div>
     </section>
   )
@@ -169,19 +180,31 @@ function EndPanel({ room, onLeave, pending, ready, leaveError }: MatchProps) {
   )
 }
 
-function MatchTurn(props: MatchProps & { order: string[]; remember: (order: string[]) => void }) {
-  const { room, ready, pending, onConfirm, onDraw, order, remember } = props
+function MatchTurn(props: MatchProps & {
+  order: string[]
+  remember: (order: string[]) => void
+  preferred: MeldKind
+  prefer: (kind: MeldKind) => void
+}) {
+  const { room, ready, pending, onConfirm, onDraw, order, remember, preferred, prefer } = props
   const { game } = room
   const self = room.players.find(player => player.id === room.selfId)!
   const current = room.players.find(player => player.id === game.currentPlayerId)
-  const playing = !game.end && game.currentPlayerId === room.selfId
-  const editable = ready && !pending && !game.end
+  const reducedMotion = useReducedMotion()
+  const matchRef = useRef<HTMLElement>(null)
+  const [intro] = useState(() => ({ started: game.dealRemainingMs > 0, endsAt: performance.now() + game.dealRemainingMs }))
+  const [dealing, setDealing] = useState(intro.started)
+  const showDeal = dealing && !reducedMotion && typeof Element.prototype.animate === 'function'
+  const playing = !dealing && !game.end && game.currentPlayerId === room.selfId
+  const editable = ready && !pending && !dealing && !game.end
   const [baseline] = useState(() => startDraft(game.table, orderRack(game.rack, order)))
   const [rules] = useState(() => turnRules(game.table, self.opened))
   const [draft, setDraft] = useState(baseline)
   const [moves, setMoves] = useState<Move[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [dragged, setDragged] = useState<string | null>(null)
+  const [dragGroup, setDragGroup] = useState<TileData[] | null>(null)
+  const holdTimer = useRef<number | undefined>(undefined)
   const [problem, setProblem] = useState<Problem | null>(null)
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -190,8 +213,18 @@ function MatchTurn(props: MatchProps & { order: string[]; remember: (order: stri
   const tiles = [...draft.rack, ...draft.table.flatMap(group => group.tiles)]
   const dragTile = tiles.find(tile => tile.id === dragged)
   const selectedTile = tiles.find(tile => tile.id === selected)
+  const selectedGroup = playing && selected ? findRackMeld(draft.rack, selected, preferred) : null
+  const carried = dragGroup ? new Set(dragGroup.map(tile => tile.id)) : EMPTY_DRAG_GROUP
   const rackChanged = draft.rack.some((tile, index) => tile.id !== baseline.rack[index]?.id)
   const started = moves.length > 0 || rackChanged
+
+  useEffect(() => {
+    if (!intro.started) return
+    const timer = window.setTimeout(() => setDealing(false), Math.max(0, intro.endsAt - performance.now()))
+    return () => window.clearTimeout(timer)
+  }, [intro])
+
+  useEffect(() => () => window.clearTimeout(holdTimer.current), [])
 
   function keepOrder(rack: TileData[]) {
     const ids = rack.map(tile => tile.id)
@@ -200,18 +233,19 @@ function MatchTurn(props: MatchProps & { order: string[]; remember: (order: stri
   }
 
   function apply(move: Move) {
-    if (!editable || move.tile === move.anchor) return
-    const rackOnly = move.to === 'rack' && draft.rack.some(tile => tile.id === move.tile)
+    if (!editable) return
+    const rackOnly = move.to === 'rack' && ('tiles' in move || draft.rack.some(tile => tile.id === move.tile))
     if (!playing && !rackOnly) return
     if (!rackOnly && moves.length >= 2048) {
       setProblem({ message: 'Reinicia el turno para seguir editando la jugada.' })
       return
     }
-    const result = moveTile(draft, rules, move)
+    const result = applyMove(draft, rules, move)
     if (!result.ok) {
       setProblem(result.error)
       return
     }
+    if (result.data === draft) return
     setDraft(result.data)
     setProblem(null)
     setSelected(null)
@@ -229,14 +263,43 @@ function MatchTurn(props: MatchProps & { order: string[]; remember: (order: stri
     }
   }
 
-  function drop({ active, over }: DragEndEvent) {
+  function stopWaitingForHold() {
+    window.clearTimeout(holdTimer.current)
+    holdTimer.current = undefined
+  }
+
+  function startDrag({ active, activatorEvent }: DragStartEvent) {
+    const id = String(active.id)
+    setSelected(null)
+    setDragged(id)
+    stopWaitingForHold()
+    const group = findRackMeld(draft.rack, id, preferred)
+    const elapsed = performance.now() - activatorEvent.timeStamp
+    if (group && elapsed >= GROUP_HOLD_MS) setDragGroup(group)
+    else if (group && activatorEvent.type === 'touchstart') {
+      holdTimer.current = window.setTimeout(() => setDragGroup(group), GROUP_HOLD_MS - Math.max(0, elapsed))
+    }
+  }
+
+  function moveDrag({ delta }: DragMoveEvent) {
+    if (Math.hypot(delta.x, delta.y) > 8) stopWaitingForHold()
+  }
+
+  function endDrag() {
+    stopWaitingForHold()
     setDragged(null)
+    setDragGroup(null)
+  }
+
+  function drop({ active, over }: DragEndEvent) {
+    endDrag()
     if (!over) return
     const target = over.data.current as DropTarget | undefined
     if (!target) return
     const rectangle = active.rect.current.translated
     const before = rectangle && rectangle.left + rectangle.width / 2 < over.rect.left + over.rect.width / 2
-    apply({ tile: String(active.id), ...target, side: before ? 'before' : 'after' })
+    const moved = dragGroup ? { tiles: dragGroup.map(tile => tile.id) } : { tile: String(active.id) }
+    apply({ ...moved, ...target, side: before ? 'before' : 'after' })
   }
 
   function sort(by: 'value' | 'color') {
@@ -248,6 +311,7 @@ function MatchTurn(props: MatchProps & { order: string[]; remember: (order: stri
       return by === 'value' ? value || color : color || value
     })
     setDraft({ ...draft, rack })
+    prefer(by === 'value' ? 'set' : 'run')
     keepOrder(rack)
     setSelected(null)
   }
@@ -260,7 +324,7 @@ function MatchTurn(props: MatchProps & { order: string[]; remember: (order: stri
     setProblem(null)
   }
 
-  const turnStatus = game.end ? 'Partida terminada' : playing ? 'Tu turno' : `Turno de ${current?.name ?? 'otro jugador'}`
+  const turnStatus = dealing ? 'Repartiendo fichas…' : game.end ? 'Partida terminada' : playing ? 'Tu turno' : `Turno de ${current?.name ?? 'otro jugador'}`
   return (
     <DndContext sensors={sensors} collisionDetection={targetsUnderPointer}
       accessibility={{
@@ -272,42 +336,48 @@ function MatchTurn(props: MatchProps & { order: string[]; remember: (order: stri
           onDragCancel: () => 'Movimiento cancelado.',
         },
       }}
-      onDragStart={({ active }) => { setSelected(null); setDragged(String(active.id)) }}
-      onDragCancel={() => setDragged(null)}
+      onDragStart={startDrag}
+      onDragMove={moveDrag}
+      onDragCancel={endDrag}
       onDragEnd={drop}>
-      <main className="match">
+      <main ref={matchRef} className={`match ${showDeal ? 'match-dealing' : ''} ${intro.started && !dealing ? 'match-dealt' : ''}`}>
         <div className="match-top">
           <div className="table-heading">
             <div>
               <h1>Mesa de juego</h1>
               <p className={`turn-state ${playing ? 'turn-yours' : ''}`} role="status">{turnStatus}</p>
             </div>
-            <div className="pool-status" aria-label={`Pozo de fichas: ${game.poolCount}`}>
-              <Layers3 size={22} /><div><strong>{game.poolCount}</strong><span>En el pozo</span></div>
+            <div className="pool-status" data-deal-pool data-empty={game.poolCount === 0} aria-label={`Pozo de fichas: ${game.poolCount}`}>
+              <span className="pool-stack" aria-hidden="true"><i /><i /><i /></span>
+              <div><strong>{game.poolCount}</strong><span>En el pozo</span></div>
             </div>
           </div>
-          <PlayerStrip players={room.players} current={game.end ? undefined : game.currentPlayerId} self={room.selfId} />
+          <PlayerStrip players={room.players} current={game.end || dealing ? undefined : game.currentPlayerId} self={room.selfId} dealing={showDeal} />
         </div>
         <BoardSurface enabled={Boolean(playing && editable)}>
           {game.end && <EndPanel {...props} />}
-          {!game.end && <div className="board-note">
+          {!game.end && !dealing && !selectedTile && <div className="board-note">
             {playing && !self.opened ? <><LockKeyhole size={16} /> Apertura: baja 30 puntos desde tu atril.</>
               : !playing && !current?.connected ? 'El jugador en turno está reconectando.'
               : playing ? 'Selecciona una ficha y pulsa su destino.' : 'Puedes ordenar tu atril mientras esperas.'}
             {game.poolCount === 0 && <span>Pasos consecutivos: {game.emptyPasses}/{room.players.length}</span>}
           </div>}
-          {playing && selectedTile && <p className="board-selection" role="status">{tileName(selectedTile)} · Pulsa el destino</p>}
+          {selectedTile && <div className="board-selection">
+            <span role="status">{tileName(selectedTile)} · Pulsa el destino</span>
+            {selectedGroup && <button type="button" className="button board-group-action"
+              onClick={() => apply({ tiles: selectedGroup.map(tile => tile.id), to: 'new' })}>Bajar {selectedGroup.length} juntas</button>}
+          </div>}
           <div className={`meld-grid ${draft.table.length ? '' : 'board-empty'}`}>
             {draft.table.map((group, index) => <Group key={group.id} group={group} index={index}
               canDrop={Boolean(playing && editable)}
               editable={Boolean(playing && editable && (self.opened || !group.tiles.some(tile => rules.tableIds.has(tile.id))))}
               selected={selected} invalid={problem?.groupId === group.id} onTarget={clickTarget} />)}
             {playing ? <NewGroup enabled={Boolean(editable)} selected={Boolean(selected)} onAdd={() => clickTarget({ to: 'new' })} />
-              : !draft.table.length && !game.end ? <p className="empty-label"><Layers3 size={30} /> La mesa está vacía</p> : null}
+              : !draft.table.length && !game.end && !dealing ? <p className="empty-label"><Layers3 size={30} /> La mesa está vacía</p> : null}
           </div>
         </BoardSurface>
         <div className="match-bottom">
-          <Rack tiles={draft.rack} selected={selected} editable={Boolean(editable)} onTarget={clickTarget} onSort={sort} />
+          <Rack tiles={draft.rack} selected={selected} editable={Boolean(editable)} concealed={Boolean(showDeal)} carried={carried} onTarget={clickTarget} onSort={sort} />
           {!game.end && <div className="turn-actions">
             <ErrorNotice error={problem} />
             <div className="turn-buttons">
@@ -322,7 +392,13 @@ function MatchTurn(props: MatchProps & { order: string[]; remember: (order: stri
           </div>}
         </div>
       </main>
-      <DragOverlay dropAnimation={null}>{dragTile && <div className="tile-overlay"><TileVisual tile={dragTile} /></div>}</DragOverlay>
+      {showDeal && <DealAnimation match={matchRef} endsAt={intro.endsAt} self={room.selfId} poolCount={game.poolCount} />}
+      <DragOverlay dropAnimation={null}>{dragTile && <div className={`tile-overlay ${dragGroup ? 'tile-overlay-group' : ''}`}>
+        {dragGroup ? <>
+          <span className="overlay-fan">{dragGroup.slice(0, 4).map(tile => <TileVisual key={tile.id} tile={tile} />)}</span>
+          <span className="overlay-count">{dragGroup.length} fichas</span>
+        </> : <TileVisual tile={dragTile} />}
+      </div>}</DragOverlay>
     </DndContext>
   )
 }
@@ -331,7 +407,8 @@ export function Match(props: MatchProps) {
   const { room } = props
   const key = `rummy.rack.${room.code}.${room.selfId}`
   const [order, setOrder] = useState(() => loadOrder(key))
-  return <MatchTurn key={room.game.turn} {...props} order={order} remember={next => {
+  const [preferred, prefer] = useState<MeldKind>('set')
+  return <MatchTurn key={room.game.turn} {...props} order={order} preferred={preferred} prefer={prefer} remember={next => {
     setOrder(next)
     try { sessionStorage.setItem(key, JSON.stringify(next)) } catch { /* Private mode may disable storage. */ }
   }} />

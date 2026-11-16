@@ -46,6 +46,8 @@ function RulesDialog({ dialog }: { dialog: React.RefObject<HTMLDialogElement | n
         <dd>Vale lo mismo que la ficha que representa. Tras abrir, coloca la ficha indicada encima del comodín para recuperarlo y úsalo en otro grupo en ese turno.</dd>
         <dt>Tu turno</dt>
         <dd>Selecciona una ficha y pulsa su destino. También puedes arrastrarla. En una pantalla táctil mantén pulsada la ficha para arrastrar y desliza enseguida para desplazarte. Confirma una jugada con al menos una ficha de tu atril, o roba y cede el turno.</dd>
+        <dt>Mover varias fichas juntas</dt>
+        <dd>Ordena por número para dar prioridad a tríos o cuartetos y por color para dar prioridad a escaleras. Mantén pulsada una ficha un poco más antes de arrastrar para llevarte su grupo. También puedes seleccionarla y pulsar «Bajar fichas juntas» cuando la opción aparezca.</dd>
         <dt>Victoria</dt>
         <dd>Gana quien vacía su atril. Con el pozo vacío, si todos pasan en una ronda, gana quien tenga menos puntos. Cada comodín en el atril vale 30 puntos.</dd>
       </dl>

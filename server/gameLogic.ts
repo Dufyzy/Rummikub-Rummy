@@ -1,14 +1,16 @@
 import { randomInt } from 'node:crypto'
-import { moveTile, startDraft, turnRules } from './draft'
-import { COLORS, failure, type Face, type GameEnd, type Meld, type Move, type Result, type Tile } from './protocol'
+import { applyMove, lockedFaces, startDraft, turnRules } from './draft'
+import { analyzeMeld } from './melds'
+import { COLORS, DEAL_DURATION_MS, STARTING_RACK_SIZE, failure, type GameEnd, type Meld, type Move, type Result, type Tile } from './protocol'
 
-type MeldAnalysis = { kind: 'set' | 'run'; points: number; jokers: Record<string, Face> }
+export { analyzeMeld } from './melds'
 type GamePlayer = { id: string; name: string; rack: Tile[]; opened: boolean }
 export type Game = {
   players: GamePlayer[]
   pool: Tile[]
   table: Meld[]
   turn: number
+  dealEndsAt: number
   current: number
   emptyPasses: number
   end: GameEnd | null
@@ -31,52 +33,8 @@ export function createGame(seats: Pick<GamePlayer, 'id' | 'name'>[]): Game {
     const j = randomInt(i + 1)
     ;[pool[i], pool[j]] = [pool[j], pool[i]]
   }
-  const players = seats.map(({ id, name }) => ({ id, name, rack: pool.splice(0, 14), opened: false }))
-  return { players, pool, table: [], turn: 1, current: randomInt(players.length), emptyPasses: 0, end: null }
-}
-
-export function analyzeMeld(tiles: Tile[], locked: ReadonlyMap<string, Face> = new Map()): MeldAnalysis | null {
-  if (tiles.length < 3 || tiles.length > 13) return null
-  const numbered = tiles.filter(tile => tile.color !== 'joker')
-  const first = numbered[0]
-  if (!first) return null
-  const usedColors = new Set(numbered.map(tile => tile.color))
-  const jokers = tiles.filter(tile => tile.color === 'joker')
-  const candidates: MeldAnalysis[] = []
-
-  if (tiles.length <= 4 && usedColors.size === numbered.length && numbered.every(tile => tile.value === first.value)) {
-    const available = COLORS.filter(color => !usedColors.has(color))
-    const assignments: Record<string, Face> = {}
-    for (const joker of jokers) {
-      const face = locked.get(joker.id)
-      if (face) assignments[joker.id] = face
-    }
-    const reserved = Object.values(assignments).map(face => face.color)
-    const unreserved = available.filter(color => !reserved.includes(color))
-    if (new Set(reserved).size === reserved.length
-      && Object.values(assignments).every(face => face.value === first.value && available.includes(face.color))) {
-      for (const joker of jokers) {
-        if (!assignments[joker.id]) assignments[joker.id] = { color: unreserved.shift()!, value: first.value }
-      }
-      candidates.push({ kind: 'set', points: first.value * tiles.length, jokers: assignments })
-    }
-  }
-
-  const start = first.value - tiles.indexOf(first)
-  if (start >= 1 && start + tiles.length - 1 <= 13
-    && tiles.every((tile, i) => tile.color === 'joker' || (tile.color === first.color && tile.value === start + i))) {
-    const color = first.color
-    const assignments = Object.fromEntries(tiles.flatMap((tile, i) =>
-      tile.color === 'joker' ? [[tile.id, { color, value: start + i }]] : []))
-    candidates.push({ kind: 'run', points: tiles.length * (2 * start + tiles.length - 1) / 2, jokers: assignments })
-  }
-
-  const compatible = candidates.filter(candidate => jokers.every(joker => {
-    const face = locked.get(joker.id)
-    const assigned = candidate.jokers[joker.id]
-    return !face || (face.value === assigned.value && face.color === assigned.color)
-  }))
-  return compatible.sort((a, b) => b.points - a.points)[0] ?? null
+  const players = seats.map(({ id, name }) => ({ id, name, rack: pool.splice(0, STARTING_RACK_SIZE), opened: false }))
+  return { players, pool, table: [], turn: 1, dealEndsAt: Date.now() + DEAL_DURATION_MS, current: randomInt(players.length), emptyPasses: 0, end: null }
 }
 
 export function confirmTurn(game: Game, moves: Move[]): Result<Game> {
@@ -84,12 +42,12 @@ export function confirmTurn(game: Game, moves: Move[]): Result<Game> {
   const rules = turnRules(game.table, player.opened)
   let draft = startDraft(game.table, player.rack)
   for (const move of moves) {
-    const result = moveTile(draft, rules, move)
+    const result = applyMove(draft, rules, move)
     if (!result.ok) return result
     draft = result.data
   }
 
-  const locked = new Map([...rules.jokers].flatMap(([id, binding]) => draft.freedJokers.has(id) ? [] : [[id, binding.face]]))
+  const locked = lockedFaces(rules, draft.freedJokers)
   let openingPoints = 0
   const table: Meld[] = []
   for (const [index, group] of draft.table.entries()) {

@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { Sparkles } from 'lucide-react'
-import type { Face, Move, Tile as TileData } from '../../server/protocol'
+import type { Face, MoveTarget, Tile as TileData } from '../../server/protocol'
 
 const colorNames = { red: 'rojo', blue: 'azul', black: 'negro', orange: 'naranja' }
 
@@ -22,16 +22,17 @@ export function TileVisual({ tile, face }: { tile: TileData; face?: Face }) {
   )
 }
 
-export type DropTarget = Omit<Move, 'tile'>
+export type DropTarget = MoveTarget
 
 export function Tile({
-  tile, face, zone, selected, editable, onClick,
+  tile, face, zone, selected, editable, movingWithGroup, onClick,
 }: {
   tile: TileData
   face?: Face
-  zone: Move['to']
+  zone: MoveTarget['to']
   selected: boolean
   editable: boolean
+  movingWithGroup?: boolean
   onClick: () => void
 }) {
   const { setNodeRef, listeners, isDragging, attributes } = useDraggable({ id: tile.id, disabled: !editable })
@@ -46,7 +47,7 @@ export function Tile({
     <button
       ref={node => { setNodeRef(node); setDropRef(node) }}
       type="button"
-      className={`tile-button ${selected ? 'tile-selected' : ''} ${isDragging ? 'tile-dragging' : ''} ${isOver && !isDragging ? 'tile-over' : ''}`}
+      className={`tile-button ${selected ? 'tile-selected' : ''} ${isDragging || movingWithGroup ? 'tile-dragging' : ''} ${isOver && !isDragging ? 'tile-over' : ''}`}
       aria-label={label}
       aria-describedby={attributes['aria-describedby']}
       aria-pressed={selected}

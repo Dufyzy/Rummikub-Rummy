@@ -9,12 +9,16 @@ export type Meld = {
   jokers: Record<string, Face>
 }
 
-export type Move = {
-  tile: string
+export const DEAL_DURATION_MS = 3_400
+export const STARTING_RACK_SIZE = 14
+
+export type MoveTarget = {
   to: number | 'rack' | 'new'
   anchor?: string
   side?: 'before' | 'after'
 }
+
+export type Move = MoveTarget & ({ tile: string } | { tiles: string[] })
 
 export type Problem = { message: string; groupId?: number }
 export type Result<T> = { ok: true; data: T } | { ok: false; error: Problem }
@@ -37,6 +41,7 @@ export type GameEnd = {
 
 export type GameView = {
   turn: number
+  dealRemainingMs: number
   currentPlayerId: string
   poolCount: number
   emptyPasses: number

@@ -3,7 +3,7 @@ WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm ci
 COPY client/ ./
-COPY server/protocol.ts server/draft.ts /app/server/
+COPY server/protocol.ts server/draft.ts server/melds.ts /app/server/
 RUN npm run build
 
 FROM nginx:alpine

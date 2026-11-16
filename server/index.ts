@@ -41,14 +41,20 @@ function readMoves(value: unknown): Move[] | null {
   const moves: Move[] = []
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') return null
-    const { tile, to, anchor, side } = entry as Record<string, unknown>
-    if (typeof tile !== 'string' || tile.length > 20
-      || (to !== 'new' && to !== 'rack' && !(typeof to === 'number' && Number.isSafeInteger(to) && to > 0))
-      || (anchor !== undefined && (typeof anchor !== 'string' || anchor.length > 20))
+    const { tile, tiles, to, anchor, side } = entry as Record<string, unknown>
+    if ((to !== 'new' && to !== 'rack' && !(typeof to === 'number' && Number.isSafeInteger(to) && to > 0))
+      || (anchor !== undefined && !isTileId(anchor))
       || (side !== undefined && side !== 'before' && side !== 'after')) return null
-    moves.push({ tile, to, anchor, side } as Move)
+    if (tiles === undefined && isTileId(tile)) moves.push({ tile, to, anchor, side })
+    else if (tile === undefined && Array.isArray(tiles) && tiles.length >= 3 && tiles.length <= 13 && tiles.every(isTileId)) {
+      moves.push({ tiles, to, anchor, side })
+    } else return null
   }
   return moves
+}
+
+function isTileId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 20
 }
 
 function roomCode(): string {
@@ -104,6 +110,7 @@ function publish(room: Room) {
       players,
       game: game && {
         turn: game.turn,
+        dealRemainingMs: Math.max(0, game.dealEndsAt - Date.now()),
         currentPlayerId: game.players[game.current].id,
         poolCount: game.pool.length,
         emptyPasses: game.emptyPasses,
@@ -121,6 +128,7 @@ function activeTurn(socket: GameSocket, turn: unknown, reply: Reply): { game: Ga
   const game = seat?.room.game
   if (!seat || !game || game.end) reply(failure('No hay una partida en curso.'))
   else if (game.turn !== turn || game.players[game.current].id !== seat.player.id) reply(failure('El turno ya cambió.'))
+  else if (Date.now() < game.dealEndsAt) reply(failure('El reparto de fichas aún está en curso.'))
   else return { game, room: seat.room }
 }
 
