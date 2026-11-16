@@ -3,12 +3,19 @@ import type { Socket } from 'socket.io-client'
 import { CHAT_HISTORY_LIMIT, REACTION_DISPLAY_MS } from '../../server/protocol'
 import type { ChatMessage, ClientEvents, LiveReaction, Problem, ReactionKind, Result, ServerEvents } from '../../server/protocol'
 
+export type IncomingMessage = {
+  message: ChatMessage
+  startedAt: number
+  duration: number
+}
+
 type ChatState = {
   code: string
   selfId: string
   messages: ChatMessage[]
   open: boolean
   unread: number
+  preview: IncomingMessage | null
 }
 
 export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
@@ -28,8 +35,20 @@ export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
   }, [])
 
   const setOpen = useCallback((open: boolean) => {
-    setChat(current => current && { ...current, open, unread: open ? 0 : current.unread })
+    setChat(current => current && {
+      ...current, open, unread: open ? 0 : current.unread, preview: open ? null : current.preview,
+    })
   }, [])
+
+  const preview = chat?.preview
+  useEffect(() => {
+    if (!preview) return
+    const remaining = preview.startedAt + preview.duration - performance.now()
+    const timer = window.setTimeout(() => {
+      setChat(current => current?.preview === preview ? { ...current, preview: null } : current)
+    }, Math.max(0, remaining))
+    return () => window.clearTimeout(timer)
+  }, [preview])
 
   useEffect(() => {
     const expiry = timers.current
@@ -37,7 +56,7 @@ export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
       codeRef.current = code
       setChat(current => {
         if (!current || current.code !== code || current.selfId !== selfId) {
-          return { code, selfId, messages, open: false, unread: 0 }
+          return { code, selfId, messages, open: false, unread: 0, preview: null }
         }
         const known = new Set(current.messages.map(message => message.id))
         const missed = current.open ? 0 : messages.filter(message => message.senderId !== selfId && !known.has(message.id)).length
@@ -45,12 +64,15 @@ export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
       })
     }
     const receiveMessage: ServerEvents['chat:message'] = ({ code, message }) => {
+      const startedAt = performance.now()
       setChat(current => {
         if (!current || current.code !== code || current.messages.some(item => item.id === message.id)) return current
+        const incoming = !current.open && message.senderId !== current.selfId
         return {
           ...current,
           messages: [...current.messages, message].slice(-CHAT_HISTORY_LIMIT),
-          unread: current.unread + Number(!current.open && message.senderId !== current.selfId),
+          unread: current.unread + Number(incoming),
+          preview: incoming ? { message, startedAt, duration: Math.min(8500, 4000 + message.text.length * 17) } : current.preview,
         }
       })
     }

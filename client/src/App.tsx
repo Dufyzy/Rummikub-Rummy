@@ -153,6 +153,7 @@ export function App() {
 
   const game = room?.game
   const conversation = chat && room?.code === chat.code ? chat : null
+  const incoming = conversation?.preview ?? undefined
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -173,16 +174,19 @@ export function App() {
         </div>
       </header>
       {replaced && <div className="session-message" role="status">Tu asiento está activo en otra pestaña. <button onClick={() => socket.connect()}>Recuperar asiento</button></div>}
-      {room && game ? <Match key={`match-${room.selfId}`} room={{ ...room, game }} reactions={reactions} ready={ready} pending={pending}
+      {room && game ? <Match key={`match-${room.selfId}`} room={{ ...room, game }} reactions={reactions} incoming={incoming} ready={ready} pending={pending}
         onConfirm={moves => takeTurn(game.turn, moves)} onDraw={() => takeTurn(game.turn)}
         onLeave={() => void leave()} leaveError={problem} />
-        : room ? <Lobby room={room} reactions={reactions} ready={ready} pending={pending} error={problem} onStart={() => void start()} onLeave={() => void leave()} />
+        : room ? <Lobby room={room} reactions={reactions} incoming={incoming} ready={ready} pending={pending} error={problem} onStart={() => void start()} onLeave={() => void leave()} />
         : seat ? <main className="screen recovery" role="status">Recuperando tu asiento en {seat.code}…</main>
         : <Entry invite={invite} ready={ready} pending={pending} error={problem} onEnter={(name, code) => void enter(name, code)} />}
       {conversation && <ChatPanel key={`chat-${conversation.selfId}`} messages={conversation.messages} selfId={conversation.selfId} open={conversation.open}
         ready={ready} onClose={closeChat} onSend={sendMessage} onReact={react} />}
       <div className="sr-only" role="status">
         {announcement && <span key={announcement.id}>{announcement.senderName} envió «{reactionLabel(announcement.kind)}».</span>}
+      </div>
+      <div className="sr-only" role="status">
+        {incoming && <span key={incoming.message.id}>Mensaje de {incoming.message.senderName}. {incoming.message.text}</span>}
       </div>
       <RulesDialog dialog={rulesDialog} />
     </div>

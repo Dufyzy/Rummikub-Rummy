@@ -12,10 +12,13 @@ import { findRackMeld } from './rackMeld'
 import { Avatar, ErrorNotice } from './RoomScreens'
 import { Tile, TileVisual, tileName, type DropTarget } from './Tile'
 import { PlayerReaction } from './Reactions'
+import { MessagePreview } from './MessagePreview'
+import type { IncomingMessage } from './roomSocial'
 
 type MatchProps = {
   room: RoomView & { game: GameView }
   reactions: Record<string, LiveReaction>
+  incoming?: IncomingMessage
   ready: boolean
   pending: boolean
   onConfirm: (moves: Move[]) => Promise<Problem | null>
@@ -107,12 +110,13 @@ function NewGroup({ enabled, selected, onAdd }: { enabled: boolean; selected: bo
   )
 }
 
-function PlayerStrip({ players, current, self, dealing, reactions }: {
+function PlayerStrip({ players, current, self, dealing, reactions, incoming }: {
   players: PlayerView[]
   current?: string
   self: string
   dealing: boolean
   reactions: Record<string, LiveReaction>
+  incoming?: IncomingMessage
 }) {
   return (
     <ul className="match-players" style={{ '--player-count': players.length } as React.CSSProperties} aria-label="Jugadores">
@@ -125,6 +129,7 @@ function PlayerStrip({ players, current, self, dealing, reactions }: {
           </div>
           {player.id === current && <span className="current-dot" title="Turno actual" />}
           <PlayerReaction reaction={reactions[player.id]} />
+          <MessagePreview incoming={incoming?.message.senderId === player.id ? incoming : undefined} />
         </li>
       ))}
     </ul>
@@ -362,7 +367,7 @@ function MatchTurn(props: MatchProps & {
             </div>
           </div>
           <PlayerStrip players={room.players} current={game.end || dealing ? undefined : game.currentPlayerId}
-            self={room.selfId} dealing={showDeal} reactions={props.reactions} />
+            self={room.selfId} dealing={showDeal} reactions={props.reactions} incoming={props.incoming} />
         </div>
         <BoardSurface enabled={Boolean(playing && editable)}>
           {game.end && <EndPanel {...props} />}

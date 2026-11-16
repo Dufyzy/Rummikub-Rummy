@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { MessageCircle, Send, SmilePlus, X } from 'lucide-react'
-import { CHAT_TEXT_LIMIT, REACTIONS, type ChatMessage, type Problem, type ReactionKind } from '../../server/protocol'
-import { ReactionChoices, ReactionIcon, reactionLabel } from './Reactions'
+import { CHAT_TEXT_LIMIT, QUICK_REACTIONS, REACTIONS, type ChatMessage, type Problem, type ReactionKind } from '../../server/protocol'
+import { ReactionChoices, ReactionEmoji, reactionLabel } from './Reactions'
 import { ErrorNotice } from './RoomScreens'
 import './ChatPanel.css'
 
@@ -27,12 +27,13 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
   const heading = useRef<HTMLHeadingElement>(null)
   const feed = useRef<HTMLDivElement>(null)
   const followLatest = useRef(true)
-  const latest = messages.at(-1)
+  const latestId = messages.at(-1)?.id
+  const latestSender = messages.at(-1)?.senderId
 
   useLayoutEffect(() => {
     const list = feed.current
-    if (open && list && (followLatest.current || latest?.senderId === selfId)) list.scrollTop = list.scrollHeight
-  }, [open, latest, selfId])
+    if (open && list && (followLatest.current || latestSender === selfId)) list.scrollTop = list.scrollHeight
+  }, [open, latestId, latestSender, selfId])
 
   useEffect(() => {
     const element = panel.current
@@ -117,7 +118,7 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
                     <button key={kind} type="button" className={`chat-reaction-count reaction-${kind}`}
                       aria-pressed={users.includes(selfId)} aria-label={`${reactionLabel(kind)}, ${users.length}`}
                       disabled={!ready || reacting} onClick={() => void choose(kind, message.id)}>
-                      <ReactionIcon kind={kind} size={15} /> {users.length}
+                      <ReactionEmoji kind={kind} /> {users.length}
                     </button>
                   ) : null
                 })}
@@ -134,7 +135,7 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
       <div className="chat-footer">
         <div className="chat-quick">
           <h3>Reacciones en la mesa</h3>
-          <ReactionChoices disabled={!ready || reacting} onChoose={kind => void choose(kind)} />
+          <ReactionChoices choices={QUICK_REACTIONS} disabled={!ready || reacting} onChoose={kind => void choose(kind)} />
         </div>
         <ErrorNotice error={problem} />
         {!ready && <p className="muted chat-connection" role="status">Reconectando el chat…</p>}

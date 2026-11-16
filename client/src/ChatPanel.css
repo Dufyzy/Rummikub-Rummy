@@ -135,11 +135,21 @@
 .chat-quick { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .chat-panel[data-compact="true"] .chat-quick { display: none; }
 .chat-quick h3 { color: #e0e9de; font-size: 12px; line-height: 1.3; font-weight: 650; }
-.reaction-choices { display: flex; gap: 4px; }
+.reaction-choices { display: flex; flex-wrap: wrap; gap: 4px; }
+.chat-quick .reaction-choices { flex-wrap: nowrap; }
 .reaction-like { --reaction-color: #f4d68e; --reaction-background: #54462b; }
-.reaction-laugh { --reaction-color: #ffc3a4; --reaction-background: #5e3a2c; }
-.reaction-wow { --reaction-color: #c1dbfe; --reaction-background: #29465b; }
+.reaction-laugh { --reaction-color: #f4d68e; --reaction-background: #54462b; }
+.reaction-cry, .reaction-wow { --reaction-color: #c1dbfe; --reaction-background: #29465b; }
+.reaction-angry { --reaction-color: #ffc3b0; --reaction-background: #5e392e; }
 .reaction-celebrate { --reaction-color: #e8c8ff; --reaction-background: #4c355c; }
+.reaction-emoji {
+  display: block;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+}
+.chat-reaction-count .reaction-emoji { font-size: 17px; }
 .reaction-choice {
   width: 44px;
   height: 44px;
@@ -184,6 +194,86 @@
   color: var(--reaction-color);
   box-shadow: 0 3px 12px #090e0bb0;
   pointer-events: none;
+}
+.player-reaction .reaction-emoji { font-size: 21px; }
+
+.message-preview {
+  position: absolute;
+  z-index: 6;
+  inset-block-start: calc(100% + 7px);
+  inset-inline-start: var(--preview-start, 0);
+  inset-inline-end: var(--preview-end, auto);
+  width: min(272px, calc(100vw - 42px));
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px 9px;
+  border: 1px solid #b8a26c;
+  border-radius: 11px;
+  background: #20352a;
+  color: #f9f7ee;
+  box-shadow: 0 7px 20px #04100aaa;
+  transform-origin: var(--preview-origin, left top);
+  pointer-events: none;
+}
+.message-preview::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  inset-inline-start: var(--preview-tail-start, 16px);
+  inset-inline-end: var(--preview-tail-end, auto);
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  border-inline-start: 1px solid #b8a26c;
+  border-block-start: 1px solid #b8a26c;
+  background: #20352a;
+}
+.message-preview-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.message-preview-author svg { flex: 0 0 auto; }
+.message-preview-author strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-preview p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.message-preview-track {
+  width: 100%;
+  height: 2px;
+  margin-top: 1px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #dbc5883b;
+}
+.message-preview-track span { display: block; height: 100%; background: var(--gold); transform-origin: left center; }
+@media (min-width: 671px), (min-width: 550px) and (orientation: landscape) and (max-height: 500px) {
+  .match-player:nth-last-child(-n+2) > .message-preview {
+    --preview-start: auto;
+    --preview-end: 0;
+    --preview-tail-start: auto;
+    --preview-tail-end: 16px;
+    --preview-origin: right top;
+  }
+}
+@media (max-width: 670px) and (orientation: portrait), (max-width: 549px), (max-width: 670px) and (min-height: 501px) {
+  .match-player:nth-child(even) > .message-preview {
+    --preview-start: auto;
+    --preview-end: 0;
+    --preview-tail-start: auto;
+    --preview-tail-end: 16px;
+    --preview-origin: right top;
+  }
 }
 
 @media (max-width: 670px) {

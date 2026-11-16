@@ -4,6 +4,8 @@ import { motion } from 'framer-motion'
 import type { LiveReaction, PlayerView, Problem, RoomView, Tile } from '../../server/protocol'
 import { TileVisual } from './Tile'
 import { PlayerReaction } from './Reactions'
+import { MessagePreview } from './MessagePreview'
+import type { IncomingMessage } from './roomSocial'
 
 const displaySet: Tile[] = [
   { id: 'preview-red', color: 'red', value: 8 },
@@ -89,7 +91,13 @@ export function Avatar({ name, index }: { name: string; index: number }) {
   return <span className={`avatar avatar-${index % 4}`} aria-hidden="true">{initials}</span>
 }
 
-function LobbyPlayer({ player, room, index, reaction }: { player: PlayerView; room: RoomView; index: number; reaction?: LiveReaction }) {
+function LobbyPlayer({ player, room, index, reaction, incoming }: {
+  player: PlayerView
+  room: RoomView
+  index: number
+  reaction?: LiveReaction
+  incoming?: IncomingMessage
+}) {
   return (
     <li className="lobby-player">
       <Avatar name={player.name} index={index} />
@@ -99,6 +107,7 @@ function LobbyPlayer({ player, room, index, reaction }: { player: PlayerView; ro
       </div>
       {player.id === room.hostId && <span className="host-tag"><Crown size={15} /> Anfitrión</span>}
       <PlayerReaction reaction={reaction} />
+      <MessagePreview incoming={incoming} />
     </li>
   )
 }
@@ -130,10 +139,11 @@ async function copyText(value: string) {
 }
 
 export function Lobby({
-  room, reactions, ready, pending, error, onStart, onLeave,
+  room, reactions, incoming, ready, pending, error, onStart, onLeave,
 }: {
   room: RoomView
   reactions: Record<string, LiveReaction>
+  incoming?: IncomingMessage
   ready: boolean
   pending: boolean
   error: Problem | null
@@ -165,7 +175,8 @@ export function Lobby({
         <h1>Sala de espera<span className="accent">.</span></h1>
         <div className="lobby-list-heading"><h2>Jugadores</h2><span className="soft-pill"><Users size={16} /> {online}/4 conectados</span></div>
         <ul className="lobby-list">
-          {room.players.map((player, index) => <LobbyPlayer key={player.id} player={player} index={index} room={room} reaction={reactions[player.id]} />)}
+          {room.players.map((player, index) => <LobbyPlayer key={player.id} player={player} index={index} room={room}
+            reaction={reactions[player.id]} incoming={incoming?.message.senderId === player.id ? incoming : undefined} />)}
           {room.players.length < 4 && <li className="lobby-empty"><span className="avatar"><Plus size={19} /></span> {4 - room.players.length} {room.players.length === 3 ? 'asiento libre' : 'asientos libres'}</li>}
         </ul>
         <button className="button button-quiet leave-button" disabled={!ready || pending} onClick={onLeave}><DoorOpen size={17} /> Salir de la sala</button>

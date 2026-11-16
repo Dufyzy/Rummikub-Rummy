@@ -61,7 +61,8 @@ export type RoomView = {
 export const CHAT_TEXT_LIMIT = 280
 export const CHAT_HISTORY_LIMIT = 80
 export const REACTION_DISPLAY_MS = 2400
-export const REACTIONS = ['like', 'laugh', 'wow', 'celebrate'] as const
+export const QUICK_REACTIONS = ['laugh', 'cry', 'angry', 'celebrate'] as const
+export const REACTIONS = ['like', ...QUICK_REACTIONS, 'wow'] as const
 export type ReactionKind = (typeof REACTIONS)[number]
 
 export type ChatMessage = {
