@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import { BookOpen, CircleHelp, Dice5, Radio, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BookOpen, CircleHelp, MessageCircle, Radio, X } from 'lucide-react'
 import { io, type Socket } from 'socket.io-client'
 import type { ClientEvents, Move, Problem, Result, RoomView, Seat, ServerEvents } from '../../server/protocol'
 import { Match } from './Match'
 import { Entry, Lobby } from './RoomScreens'
+import { ChatPanel } from './ChatPanel'
+import { reactionLabel } from './Reactions'
+import { useRoomSocial } from './roomSocial'
 
 const socket: Socket<ServerEvents, ClientEvents> = io({ autoConnect: false })
 const storageKey = 'rummy.seat'
@@ -56,6 +59,7 @@ function RulesDialog({ dialog }: { dialog: React.RefObject<HTMLDialogElement | n
 }
 
 export function App() {
+  const { chat, setOpen: setChatOpen, reset: resetSocial, reactions, announcement, send: sendMessage, react } = useRoomSocial(socket)
   const [room, setRoom] = useState<RoomView | null>(null)
   const [seat, setSeat] = useState(readSeat)
   const [ready, setReady] = useState(false)
@@ -64,6 +68,11 @@ export function App() {
   const [replaced, setReplaced] = useState(false)
   const commandPending = useRef(false)
   const rulesDialog = useRef<HTMLDialogElement>(null)
+  const chatToggle = useRef<HTMLButtonElement>(null)
+  const closeChat = useCallback(() => {
+    setChatOpen(false)
+    chatToggle.current?.focus({ preventScroll: true })
+  }, [setChatOpen])
 
   useEffect(() => {
     storeSeat(readSeat())
@@ -76,6 +85,7 @@ export function App() {
       storeSeat(null)
       setSeat(null)
       setRoom(null)
+      resetSocial()
       setProblem({ message: 'Tu asiento ha caducado. Crea una sala o vuelve a unirte.' })
     }
     socket.on('connect', onConnect)
@@ -90,7 +100,7 @@ export function App() {
       socket.off('session:expired', onExpired)
       socket.disconnect()
     }
-  }, [])
+  }, [resetSocial])
 
   async function run<T>(command: () => Promise<Result<T>>): Promise<Result<T> | undefined> {
     if (!socket.connected || commandPending.current) return
@@ -130,6 +140,7 @@ export function App() {
       storeSeat(null)
       setSeat(null)
       setRoom(null)
+      resetSocial()
     } else if (result) setProblem(result.error)
   }
 
@@ -141,25 +152,38 @@ export function App() {
   }
 
   const game = room?.game
+  const conversation = chat && room?.code === chat.code ? chat : null
   return (
     <div className="app-shell">
       <header className="site-header">
         <div className="header-inner">
-          <div className="wordmark"><span className="wordmark-icon"><Dice5 size={22} /></span> Rummy</div>
+          <div className="wordmark"><img className="wordmark-icon" src="/rummy-icon-32.png" srcSet="/rummy-icon-32.png 1x, /rummy-icon-192.png 2x" width="35" height="35" alt="" /> Rummy</div>
           <div className="header-actions">
             {room && <span className="header-code" title="Código de sala">{room.code}</span>}
             <span className={`connection ${ready ? 'connection-up' : ''}`} role="status"><Radio size={15} /> <span>{ready ? 'En línea' : 'Sin conexión'}</span></span>
+            {conversation && <button ref={chatToggle} className="button button-quiet chat-toggle" type="button"
+              aria-controls="room-chat" aria-expanded={conversation.open}
+              aria-label={conversation.unread ? `Chat, ${conversation.unread} sin leer` : 'Chat'}
+              onClick={() => conversation.open ? closeChat() : setChatOpen(true)}>
+              <MessageCircle size={18} /> <span className="chat-toggle-text">Chat</span>
+              {conversation.unread > 0 && <span className="chat-unread" aria-hidden="true">{conversation.unread > 99 ? '99+' : conversation.unread}</span>}
+            </button>}
             <button className="button button-quiet help-button" onClick={() => rulesDialog.current?.showModal()}><CircleHelp size={18} /> <span>Cómo jugar</span></button>
           </div>
         </div>
       </header>
       {replaced && <div className="session-message" role="status">Tu asiento está activo en otra pestaña. <button onClick={() => socket.connect()}>Recuperar asiento</button></div>}
-      {room && game ? <Match key={room.selfId} room={{ ...room, game }} ready={ready} pending={pending}
+      {room && game ? <Match key={`match-${room.selfId}`} room={{ ...room, game }} reactions={reactions} ready={ready} pending={pending}
         onConfirm={moves => takeTurn(game.turn, moves)} onDraw={() => takeTurn(game.turn)}
         onLeave={() => void leave()} leaveError={problem} />
-        : room ? <Lobby room={room} ready={ready} pending={pending} error={problem} onStart={() => void start()} onLeave={() => void leave()} />
+        : room ? <Lobby room={room} reactions={reactions} ready={ready} pending={pending} error={problem} onStart={() => void start()} onLeave={() => void leave()} />
         : seat ? <main className="screen recovery" role="status">Recuperando tu asiento en {seat.code}…</main>
         : <Entry invite={invite} ready={ready} pending={pending} error={problem} onEnter={(name, code) => void enter(name, code)} />}
+      {conversation && <ChatPanel key={`chat-${conversation.selfId}`} messages={conversation.messages} selfId={conversation.selfId} open={conversation.open}
+        ready={ready} onClose={closeChat} onSend={sendMessage} onReact={react} />}
+      <div className="sr-only" role="status">
+        {announcement && <span key={announcement.id}>{announcement.senderName} envió «{reactionLabel(announcement.kind)}».</span>}
+      </div>
       <RulesDialog dialog={rulesDialog} />
     </div>
   )

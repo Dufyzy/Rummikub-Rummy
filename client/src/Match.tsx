@@ -4,16 +4,18 @@ import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragStartEvent } 
 import { useReducedMotion } from 'framer-motion'
 import { ArrowDownUp, ArrowLeftToLine, Check, CircleAlert, DoorOpen, Layers3, LockKeyhole, Plus, RotateCcw, Trophy } from 'lucide-react'
 import { COLORS } from '../../server/protocol'
-import type { GameView, Meld, Move, PlayerView, Problem, RoomView, Tile as TileData } from '../../server/protocol'
+import type { GameView, LiveReaction, Meld, Move, PlayerView, Problem, RoomView, Tile as TileData } from '../../server/protocol'
 import { applyMove, startDraft, turnRules } from '../../server/draft'
 import type { MeldKind } from '../../server/melds'
 import { DealAnimation } from './DealAnimation'
 import { findRackMeld } from './rackMeld'
 import { Avatar, ErrorNotice } from './RoomScreens'
 import { Tile, TileVisual, tileName, type DropTarget } from './Tile'
+import { PlayerReaction } from './Reactions'
 
 type MatchProps = {
   room: RoomView & { game: GameView }
+  reactions: Record<string, LiveReaction>
   ready: boolean
   pending: boolean
   onConfirm: (moves: Move[]) => Promise<Problem | null>
@@ -105,7 +107,13 @@ function NewGroup({ enabled, selected, onAdd }: { enabled: boolean; selected: bo
   )
 }
 
-function PlayerStrip({ players, current, self, dealing }: { players: PlayerView[]; current?: string; self: string; dealing: boolean }) {
+function PlayerStrip({ players, current, self, dealing, reactions }: {
+  players: PlayerView[]
+  current?: string
+  self: string
+  dealing: boolean
+  reactions: Record<string, LiveReaction>
+}) {
   return (
     <ul className="match-players" style={{ '--player-count': players.length } as React.CSSProperties} aria-label="Jugadores">
       {players.map((player, index) => (
@@ -116,6 +124,7 @@ function PlayerStrip({ players, current, self, dealing }: { players: PlayerView[
             <span className="player-caption">{dealing ? 'Repartiendo' : player.connected || current === undefined ? `${player.tileCount} fichas` : 'Reconectando…'}</span>
           </div>
           {player.id === current && <span className="current-dot" title="Turno actual" />}
+          <PlayerReaction reaction={reactions[player.id]} />
         </li>
       ))}
     </ul>
@@ -352,7 +361,8 @@ function MatchTurn(props: MatchProps & {
               <div><strong>{game.poolCount}</strong><span>En el pozo</span></div>
             </div>
           </div>
-          <PlayerStrip players={room.players} current={game.end || dealing ? undefined : game.currentPlayerId} self={room.selfId} dealing={showDeal} />
+          <PlayerStrip players={room.players} current={game.end || dealing ? undefined : game.currentPlayerId}
+            self={room.selfId} dealing={showDeal} reactions={props.reactions} />
         </div>
         <BoardSurface enabled={Boolean(playing && editable)}>
           {game.end && <EndPanel {...props} />}

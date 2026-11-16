@@ -3,12 +3,23 @@ import { createServer } from 'node:http'
 import express from 'express'
 import { Server, type Socket } from 'socket.io'
 import { confirmTurn, createGame, drawOrPass, type Game } from './gameLogic'
-import { failure, type ClientEvents, type Move, type Reply, type RoomView, type Seat, type ServerEvents } from './protocol'
+import {
+  CHAT_HISTORY_LIMIT, CHAT_TEXT_LIMIT, REACTIONS, failure,
+  type ChatMessage, type ClientEvents, type Move, type ReactionKind, type Reply, type RoomView, type Seat, type ServerEvents,
+} from './protocol'
 
 type SocketData = { seatToken?: string }
 type GameSocket = Socket<ClientEvents, ServerEvents, Record<string, never>, SocketData>
-type Player = { id: string; name: string; token: string; socketId: string | null; disconnectedAt: number | null }
-type Room = { code: string; hostId: string; players: Player[]; game: Game | null }
+type Player = {
+  id: string
+  name: string
+  token: string
+  socketId: string | null
+  disconnectedAt: number | null
+  lastMessageAt: number
+  lastReactionAt: number
+}
+type Room = { code: string; hostId: string; players: Player[]; game: Game | null; messages: ChatMessage[] }
 type Membership = { room: Room; player: Player }
 
 const app = express()
@@ -70,19 +81,31 @@ function membership(socket: GameSocket): Membership | undefined {
   return seat?.player.socketId === socket.id ? seat : undefined
 }
 
-function bind(socket: GameSocket, player: Player) {
+function chatChannel(room: Room) {
+  return `chat:${room.code}`
+}
+
+function sendChatHistory(socket: GameSocket, room: Room, player: Player) {
+  socket.emit('chat:history', { code: room.code, selfId: player.id, messages: room.messages })
+}
+
+function bind(socket: GameSocket, room: Room, player: Player) {
   const previous = player.socketId
   player.socketId = socket.id
   player.disconnectedAt = null
   socket.data.seatToken = player.token
+  void socket.join(chatChannel(room))
   if (previous && previous !== socket.id) io.sockets.sockets.get(previous)?.disconnect(true)
 }
 
 function addPlayer(socket: GameSocket, room: Room, name: string): Player {
-  const player = { id: randomUUID(), name, token: randomBytes(32).toString('base64url'), socketId: null, disconnectedAt: null }
+  const player: Player = {
+    id: randomUUID(), name, token: randomBytes(32).toString('base64url'),
+    socketId: null, disconnectedAt: null, lastMessageAt: 0, lastReactionAt: 0,
+  }
   room.players.push(player)
   seats.set(player.token, { room, player })
-  bind(socket, player)
+  bind(socket, room, player)
   return player
 }
 
@@ -138,7 +161,7 @@ function enter(socket: GameSocket, payload: unknown, create: boolean, reply: Rep
   if (!name) return reply(failure('Escribe un nombre de hasta 24 caracteres.'))
   const code = create ? roomCode() : readCode(payload)
   if (!code) return reply(failure('Escribe un código de sala de 4 o 5 letras.'))
-  const room = create ? { code, hostId: '', players: [], game: null } : rooms.get(code)
+  const room: Room | undefined = create ? { code, hostId: '', players: [], game: null, messages: [] } : rooms.get(code)
   if (!room) return reply(failure('No encontramos una sala con ese código.'))
   if (room.game) return reply(failure('La partida de esa sala ya comenzó.'))
   if (room.players.length >= 4) return reply(failure('La sala está llena.'))
@@ -149,6 +172,11 @@ function enter(socket: GameSocket, payload: unknown, create: boolean, reply: Rep
   }
   reply({ ok: true, data: { code: room.code, token: player.token } })
   publish(room)
+  sendChatHistory(socket, room, player)
+}
+
+function isReaction(value: unknown): value is ReactionKind {
+  return typeof value === 'string' && REACTIONS.some(reaction => reaction === value)
 }
 
 io.on('connection', socket => {
@@ -156,8 +184,9 @@ io.on('connection', socket => {
   if (typeof token === 'string' && token) {
     const seat = seats.get(token)
     if (seat) {
-      bind(socket, seat.player)
+      bind(socket, seat.room, seat.player)
       publish(seat.room)
+      sendChatHistory(socket, seat.room, seat.player)
     } else socket.emit('session:expired')
   }
 
@@ -173,6 +202,7 @@ io.on('connection', socket => {
     if (!seat) return reply(failure('No tienes un asiento activo.'))
     if (seat.room.game && !seat.room.game.end) return reply(failure('Todavía hay una partida en curso.'))
     forgetPlayer(seat.room, seat.player)
+    void socket.leave(chatChannel(seat.room))
     delete socket.data.seatToken
     reply({ ok: true, data: null })
     publish(seat.room)
@@ -208,6 +238,49 @@ io.on('connection', socket => {
     if (!turn) return
     turn.room.game = drawOrPass(turn.game)
     publish(turn.room)
+    reply({ ok: true, data: null })
+  })
+  socket.on('chat:send', (payload, reply) => {
+    if (typeof reply !== 'function') return
+    const seat = membership(socket)
+    if (!seat) return reply(failure('Únete a una sala para enviar mensajes.'))
+    const text = typeof payload?.text === 'string' ? payload.text.trim() : ''
+    if (!text || text.length > CHAT_TEXT_LIMIT) {
+      return reply(failure(`Escribe un mensaje de hasta ${CHAT_TEXT_LIMIT} caracteres.`))
+    }
+    const { room, player } = seat
+    const sentAt = Date.now()
+    if (sentAt - player.lastMessageAt < 400) return reply(failure('Espera un momento antes de enviar otro mensaje.'))
+    player.lastMessageAt = sentAt
+    const message: ChatMessage = { id: randomUUID(), senderId: player.id, senderName: player.name, text, sentAt, reactions: {} }
+    room.messages.push(message)
+    if (room.messages.length > CHAT_HISTORY_LIMIT) room.messages.shift()
+    io.to(chatChannel(room)).emit('chat:message', { code: room.code, message })
+    reply({ ok: true, data: null })
+  })
+  socket.on('chat:react', (payload, reply) => {
+    if (typeof reply !== 'function') return
+    const seat = membership(socket)
+    if (!seat) return reply(failure('Únete a una sala para reaccionar.'))
+    const kind: unknown = payload?.kind
+    const messageId: unknown = payload?.messageId
+    if (!isReaction(kind)) return reply(failure('Esa reacción no está disponible.'))
+    const { room, player } = seat
+    const target = messageId === undefined ? undefined : room.messages.find(message => message.id === messageId)
+    if (messageId !== undefined && !target) return reply(failure('Ese mensaje ya no está disponible en la sala.'))
+    const now = Date.now()
+    if (now - player.lastReactionAt < 350) return reply(failure('Espera un momento antes de volver a reaccionar.'))
+    player.lastReactionAt = now
+    if (target) {
+      const reactors = target.reactions[kind] ?? []
+      target.reactions[kind] = reactors.includes(player.id)
+        ? reactors.filter(id => id !== player.id) : [...reactors, player.id]
+      io.to(chatChannel(room)).emit('chat:updated', { code: room.code, message: target })
+    } else {
+      io.to(chatChannel(room)).emit('chat:reaction', {
+        code: room.code, reaction: { id: randomUUID(), senderId: player.id, senderName: player.name, kind },
+      })
+    }
     reply({ ok: true, data: null })
   })
   socket.on('disconnect', () => {

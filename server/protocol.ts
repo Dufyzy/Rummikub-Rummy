@@ -58,6 +58,28 @@ export type RoomView = {
   game: GameView | null
 }
 
+export const CHAT_TEXT_LIMIT = 280
+export const CHAT_HISTORY_LIMIT = 80
+export const REACTION_DISPLAY_MS = 2400
+export const REACTIONS = ['like', 'laugh', 'wow', 'celebrate'] as const
+export type ReactionKind = (typeof REACTIONS)[number]
+
+export type ChatMessage = {
+  id: string
+  senderId: string
+  senderName: string
+  text: string
+  sentAt: number
+  reactions: Partial<Record<ReactionKind, string[]>>
+}
+
+export type LiveReaction = {
+  id: string
+  senderId: string
+  senderName: string
+  kind: ReactionKind
+}
+
 export interface ClientEvents {
   'room:create': (payload: { name: string }, reply: Reply<Seat>) => void
   'room:join': (payload: { name: string; code: string }, reply: Reply<Seat>) => void
@@ -65,11 +87,17 @@ export interface ClientEvents {
   'game:start': (reply: Reply) => void
   'turn:confirm': (payload: { turn: number; moves: Move[] }, reply: Reply) => void
   'turn:draw': (payload: { turn: number }, reply: Reply) => void
+  'chat:send': (payload: { text: string }, reply: Reply) => void
+  'chat:react': (payload: { kind: ReactionKind; messageId?: string }, reply: Reply) => void
 }
 
 export interface ServerEvents {
   'room:state': (room: RoomView) => void
   'session:expired': () => void
+  'chat:history': (payload: { code: string; selfId: string; messages: ChatMessage[] }) => void
+  'chat:message': (payload: { code: string; message: ChatMessage }) => void
+  'chat:updated': (payload: { code: string; message: ChatMessage }) => void
+  'chat:reaction': (payload: { code: string; reaction: LiveReaction }) => void
 }
 
 export function failure(message: string, groupId?: number): Result<never> {

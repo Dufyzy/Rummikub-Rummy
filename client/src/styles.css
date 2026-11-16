@@ -65,14 +65,11 @@ button:disabled { cursor: not-allowed; opacity: .46; }
   letter-spacing: -.04em;
 }
 .wordmark-icon {
-  display: grid;
-  place-items: center;
   width: 35px;
   height: 35px;
-  border: 1px solid #e4b76891;
-  border-radius: 10px;
-  color: var(--gold);
-  background: #c99c4624;
+  flex: 0 0 auto;
+  border: 1px solid #e4b76866;
+  border-radius: 9px;
 }
 .header-actions, .connection { display: flex; align-items: center; gap: 8px; }
 .header-actions { gap: clamp(4px, 2vw, 22px); }

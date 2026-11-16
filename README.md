@@ -53,6 +53,10 @@ Con el pozo vacío, **Pasar** indica que el jugador no hará una jugada. Una ron
 
 El asiento se recupera al recargar la misma pestaña mediante `sessionStorage`. Las salas y las partidas residen en la memoria del servidor y se pierden al reiniciarlo. Una desconexión temporal durante la partida conserva el asiento y el orden de turnos.
 
+## Chat y reacciones
+
+Abre **Chat** desde la sala de espera o durante la partida. Puedes escribir a los demás jugadores, reaccionar a un mensaje con el botón junto a la burbuja o enviar una reacción que aparece brevemente junto a tu nombre. El botón del chat indica cuántos mensajes nuevos tienes mientras está cerrado. El historial de la sala conserva los últimos 80 mensajes mientras exista la sala en el servidor.
+
 ## Desarrollo y pruebas
 
 ```sh
