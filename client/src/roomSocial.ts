@@ -18,15 +18,15 @@ type ChatState = {
   preview: IncomingMessage | null
 }
 
-export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
+export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>, onIncomingMessage: () => void) {
   const [chat, setChat] = useState<ChatState | null>(null)
   const [reactions, setReactions] = useState<Record<string, LiveReaction>>({})
   const [announcement, setAnnouncement] = useState<LiveReaction | null>(null)
-  const codeRef = useRef<string | null>(null)
+  const membership = useRef<{ code: string; selfId: string } | null>(null)
   const timers = useRef(new Map<string, number>())
 
   const reset = useCallback(() => {
-    codeRef.current = null
+    membership.current = null
     timers.current.forEach(timer => window.clearTimeout(timer))
     timers.current.clear()
     setChat(null)
@@ -53,7 +53,7 @@ export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
   useEffect(() => {
     const expiry = timers.current
     const history: ServerEvents['chat:history'] = ({ code, selfId, messages }) => {
-      codeRef.current = code
+      membership.current = { code, selfId }
       setChat(current => {
         if (!current || current.code !== code || current.selfId !== selfId) {
           return { code, selfId, messages, open: false, unread: 0, preview: null }
@@ -64,6 +64,8 @@ export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
       })
     }
     const receiveMessage: ServerEvents['chat:message'] = ({ code, message }) => {
+      if (membership.current?.code !== code) return
+      if (message.senderId !== membership.current.selfId) onIncomingMessage()
       const startedAt = performance.now()
       setChat(current => {
         if (!current || current.code !== code || current.messages.some(item => item.id === message.id)) return current
@@ -81,7 +83,7 @@ export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
         ? { ...current, messages: current.messages.map(item => item.id === message.id ? message : item) } : current)
     }
     const receiveReaction: ServerEvents['chat:reaction'] = ({ code, reaction }) => {
-      if (codeRef.current !== code) return
+      if (membership.current?.code !== code) return
       const id = reaction.senderId
       setReactions(current => ({ ...current, [id]: reaction }))
       setAnnouncement(reaction)
@@ -108,7 +110,7 @@ export function useRoomSocial(socket: Socket<ServerEvents, ClientEvents>) {
       expiry.forEach(timer => window.clearTimeout(timer))
       expiry.clear()
     }
-  }, [socket])
+  }, [socket, onIncomingMessage])
 
   async function request(send: () => Promise<Result<null>>): Promise<Problem | null> {
     if (!socket.connected) return { message: 'El chat volverá al recuperar la conexión.' }

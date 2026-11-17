@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BookOpen, CircleHelp, MessageCircle, Radio, X } from 'lucide-react'
+import { BookOpen, CircleHelp, MessageCircle, Radio, Volume2, VolumeX, X } from 'lucide-react'
 import { io, type Socket } from 'socket.io-client'
 import type { ClientEvents, Move, Problem, Result, RoomView, Seat, ServerEvents } from '../../server/protocol'
 import { Match } from './Match'
 import { Entry, Lobby } from './RoomScreens'
 import { ChatPanel } from './ChatPanel'
+import { useGameSound } from './gameSound'
 import { reactionLabel } from './Reactions'
 import { useRoomSocial } from './roomSocial'
 
@@ -59,7 +60,9 @@ function RulesDialog({ dialog }: { dialog: React.RefObject<HTMLDialogElement | n
 }
 
 export function App() {
-  const { chat, setOpen: setChatOpen, reset: resetSocial, reactions, announcement, send: sendMessage, react } = useRoomSocial(socket)
+  const { enabled: soundEnabled, toggle: toggleSound, play: playSound } = useGameSound()
+  const playChatSound = useCallback(() => playSound('chat'), [playSound])
+  const { chat, setOpen: setChatOpen, reset: resetSocial, reactions, announcement, send: sendMessage, react } = useRoomSocial(socket, playChatSound)
   const [room, setRoom] = useState<RoomView | null>(null)
   const [seat, setSeat] = useState(readSeat)
   const [ready, setReady] = useState(false)
@@ -73,6 +76,17 @@ export function App() {
     setChatOpen(false)
     if (returnFocus) chatToggle.current?.focus({ preventScroll: true })
   }, [setChatOpen])
+  const previousRoom = useRef<RoomView | null>(null)
+
+  useEffect(() => {
+    const previous = previousRoom.current
+    previousRoom.current = room
+    if (!room?.game || !previous?.game || previous.code !== room.code || previous.selfId !== room.selfId) return
+    const { game } = room
+    if (game.turn > previous.game.turn && !game.end) {
+      playSound(game.currentPlayerId === room.selfId ? 'yourTurn' : 'turn')
+    }
+  }, [room, playSound])
 
   useEffect(() => {
     storeSeat(readSeat())
@@ -162,6 +176,10 @@ export function App() {
           <div className="header-actions">
             {room && <span className="header-code" title="Código de sala">{room.code}</span>}
             <span className={`connection ${ready ? 'connection-up' : ''}`} role="status"><Radio size={15} /> <span>{ready ? 'En línea' : 'Sin conexión'}</span></span>
+            {room && <button type="button" className="button button-quiet icon-button" aria-label="Sonidos del juego"
+              title={soundEnabled ? 'Silenciar sonidos' : 'Activar sonidos'} aria-pressed={soundEnabled} onClick={toggleSound}>
+              {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>}
             {conversation && <button ref={chatToggle} className="button button-quiet chat-toggle" type="button"
               aria-controls="room-chat" aria-expanded={conversation.open}
               aria-label={conversation.unread ? `Chat, ${conversation.unread} sin leer` : 'Chat'}
