@@ -22,6 +22,7 @@ function fixture(rack: Tile[], table: Meld[] = [], opened = false): Game {
     current: 0,
     emptyPasses: 0,
     end: null,
+    lastAction: null,
   }
 }
 
@@ -131,6 +132,10 @@ test('opened players can split and extend groups with a tile from their rack', (
   assert.ok(result.ok)
   assert.deepEqual(result.data.table.map(group => group.tiles.map(item => item.value)), [[1, 2, 3], [3, 4, 5]])
   assert.deepEqual(result.data.players[0].rack, [spare])
+  assert.deepEqual(result.data.lastAction?.action, {
+    kind: 'play', playerId: 'first', tilesPlayed: 1,
+    groupIds: [1, 2], tileIds: [black3.id, run[3].id, run[4].id],
+  })
 })
 
 test('a group rejects incompatible additions immediately without changing the draft', () => {
@@ -174,6 +179,14 @@ test('a rack group is placed atomically and its identities and order are validat
   const merged = confirmTurn(opened, [{ tiles: ids, to: 1 }])
   assert.ok(merged.ok)
   assert.deepEqual(merged.data.table[0].tiles, [...onTable, ...run])
+  const prepended = confirmTurn(fixture(onTable, [{ id: 1, tiles: run, jokers: {} }], true), [
+    { tiles: onTable.map(item => item.id), to: 1, anchor: run[0].id, side: 'before' },
+  ])
+  assert.ok(prepended.ok)
+  assert.deepEqual(prepended.data.lastAction?.action, {
+    kind: 'play', playerId: 'first', tilesPlayed: 3,
+    groupIds: [1], tileIds: onTable.map(item => item.id),
+  })
 })
 
 test('draw ends the turn; a full round of empty-pool passes ranks rack points and preserves ties', () => {
@@ -182,8 +195,10 @@ test('draw ends the turn; a full round of empty-pool passes ranks rack points an
   assert.deepEqual(drawn.players[0].rack, [joker, tile('pink', 1)])
   assert.equal(drawn.current, 1)
   assert.equal(drawn.emptyPasses, 0)
+  assert.deepEqual(drawn.lastAction?.action, { kind: 'draw', playerId: 'first' })
   const passed = drawOrPass(drawn)
   assert.equal(passed.end, null)
+  assert.deepEqual(passed.lastAction?.action, { kind: 'pass', playerId: 'next' })
   assert.deepEqual(drawOrPass(passed).end, { reason: 'blocked', winners: ['next'], points: { first: 31, next: 2 } })
   assert.deepEqual(drawOrPass(drawOrPass(fixture([tile('pink', 2)]))).end?.winners, ['first', 'next'])
 })

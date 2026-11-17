@@ -39,6 +39,12 @@ export type GameEnd = {
   points: Record<string, number>
 }
 
+export type TurnAction = { playerId: string } & (
+  | { kind: 'play'; tilesPlayed: number; tileIds: string[]; groupIds: number[] }
+  | { kind: 'draw' }
+  | { kind: 'pass' }
+)
+
 export type GameView = {
   turn: number
   dealRemainingMs: number
@@ -48,6 +54,7 @@ export type GameView = {
   table: Meld[]
   rack: Tile[]
   end: GameEnd | null
+  lastAction: (TurnAction & { remainingMs: number }) | null
 }
 
 export type RoomView = {

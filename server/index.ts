@@ -118,6 +118,9 @@ function forgetPlayer(room: Room, player: Player) {
 
 function publish(room: Room) {
   const game = room.game
+  const now = Date.now()
+  const notice = game?.lastAction
+  const lastAction = notice && notice.expiresAt > now ? { ...notice.action, remainingMs: notice.expiresAt - now } : null
   const players = game ? game.players.map(player => ({
     id: player.id, name: player.name, connected: room.players.some(seat => seat.id === player.id && seat.socketId),
     opened: player.opened, tileCount: player.rack.length,
@@ -133,13 +136,14 @@ function publish(room: Room) {
       players,
       game: game && {
         turn: game.turn,
-        dealRemainingMs: Math.max(0, game.dealEndsAt - Date.now()),
+        dealRemainingMs: Math.max(0, game.dealEndsAt - now),
         currentPlayerId: game.players[game.current].id,
         poolCount: game.pool.length,
         emptyPasses: game.emptyPasses,
         table: game.table,
         rack: game.players.find(item => item.id === player.id)!.rack,
         end: game.end,
+        lastAction,
       },
     }
     io.to(player.socketId).emit('room:state', view)

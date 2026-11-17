@@ -4,7 +4,7 @@ import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragStartEvent } 
 import { useReducedMotion } from 'framer-motion'
 import { ArrowDownUp, ArrowLeftToLine, Check, CircleAlert, DoorOpen, Layers3, LockKeyhole, Plus, RotateCcw, Trophy } from 'lucide-react'
 import { COLORS } from '../../server/protocol'
-import type { GameView, LiveReaction, Meld, Move, PlayerView, Problem, RoomView, Tile as TileData } from '../../server/protocol'
+import type { GameView, LiveReaction, Meld, Move, PlayerView, Problem, RoomView, Tile as TileData, TurnAction } from '../../server/protocol'
 import { applyMove, startDraft, turnRules } from '../../server/draft'
 import type { MeldKind } from '../../server/melds'
 import { DealAnimation } from './DealAnimation'
@@ -27,6 +27,7 @@ type MatchProps = {
   leaveError: Problem | null
 }
 
+type RecentPlay = Extract<TurnAction, { kind: 'play' }>
 const GROUP_HOLD_MS = 460
 const EMPTY_DRAG_GROUP = new Set<string>()
 
@@ -54,7 +55,7 @@ function orderRack(rack: TileData[], order: string[]) {
 }
 
 function Group({
-  group, index, canDrop, editable, selected, invalid, onTarget,
+  group, index, canDrop, editable, selected, invalid, recent, onTarget,
 }: {
   group: Meld
   index: number
@@ -62,13 +63,14 @@ function Group({
   editable: boolean
   selected: string | null
   invalid: boolean
+  recent?: RecentPlay
   onTarget: (target: DropTarget) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `group-${group.id}`, data: { to: group.id } satisfies DropTarget, disabled: !canDrop,
   })
   return (
-    <section ref={setNodeRef} className={`meld ${invalid ? 'meld-invalid' : ''} ${isOver ? 'drop-hover' : ''}`} aria-label={`Grupo ${index + 1}`}>
+    <section ref={setNodeRef} className={`meld ${recent ? 'meld-recent' : ''} ${invalid ? 'meld-invalid' : ''} ${isOver ? 'drop-hover' : ''}`} aria-label={`Grupo ${index + 1}`}>
       <div className="meld-label">
         <span>Grupo {index + 1}</span>
         {invalid && <CircleAlert size={14} />}
@@ -79,7 +81,7 @@ function Group({
             onClick={() => onTarget({ to: group.id, anchor: group.tiles[0].id, side: 'before' })}><ArrowLeftToLine size={17} /></button>}
         {group.tiles.map(tile => (
           <Tile key={tile.id} tile={tile} face={group.jokers[tile.id]} zone={group.id} selected={selected === tile.id}
-            editable={editable} onClick={() => onTarget({ to: group.id, anchor: tile.id })} />
+            editable={editable} recent={recent?.tileIds.includes(tile.id)} onClick={() => onTarget({ to: group.id, anchor: tile.id })} />
         ))}
         {editable && <button type="button" className="meld-add" aria-label={`Añadir al grupo ${index + 1}`} onClick={() => onTarget({ to: group.id })}><Plus size={18} /></button>}
       </div>
@@ -195,12 +197,14 @@ function EndPanel({ room, onLeave, pending, ready, leaveError }: MatchProps) {
 }
 
 function MatchTurn(props: MatchProps & {
+  notice: string
+  recentPlay?: RecentPlay
   order: string[]
   remember: (order: string[]) => void
   preferred: MeldKind
   prefer: (kind: MeldKind) => void
 }) {
-  const { room, ready, pending, onConfirm, onDraw, order, remember, preferred, prefer } = props
+  const { room, ready, pending, notice, recentPlay, onConfirm, onDraw, order, remember, preferred, prefer } = props
   const { game } = room
   const self = room.players.find(player => player.id === room.selfId)!
   const current = room.players.find(player => player.id === game.currentPlayerId)
@@ -359,7 +363,10 @@ function MatchTurn(props: MatchProps & {
           <div className="table-heading">
             <div>
               <h1>Mesa de juego</h1>
-              <p className={`turn-state ${playing ? 'turn-yours' : ''}`} role="status">{turnStatus}</p>
+              <div className="turn-line">
+                <p className={`turn-state ${playing ? 'turn-yours' : ''}`} role="status">{turnStatus}</p>
+                {notice && <span className="turn-notice" aria-hidden="true">{notice}</span>}
+              </div>
             </div>
             <div className="pool-status" data-deal-pool data-empty={game.poolCount === 0} aria-label={`Pozo de fichas: ${game.poolCount}`}>
               <span className="pool-stack" aria-hidden="true"><i /><i /><i /></span>
@@ -386,7 +393,8 @@ function MatchTurn(props: MatchProps & {
             {draft.table.map((group, index) => <Group key={group.id} group={group} index={index}
               canDrop={Boolean(playing && editable)}
               editable={Boolean(playing && editable && (self.opened || !group.tiles.some(tile => rules.tableIds.has(tile.id))))}
-              selected={selected} invalid={problem?.groupId === group.id} onTarget={clickTarget} />)}
+              selected={selected} invalid={problem?.groupId === group.id}
+              recent={recentPlay?.groupIds.includes(group.id) ? recentPlay : undefined} onTarget={clickTarget} />)}
             {playing ? <NewGroup enabled={Boolean(editable)} selected={Boolean(selected)} onAdd={() => clickTarget({ to: 'new' })} />
               : !draft.table.length && !game.end && !dealing ? <p className="empty-label"><Layers3 size={30} /> La mesa está vacía</p> : null}
           </div>
@@ -418,13 +426,35 @@ function MatchTurn(props: MatchProps & {
   )
 }
 
+function actionText(action: TurnAction, name: string) {
+  if (action.kind === 'draw') return `${name} robó una ficha`
+  if (action.kind === 'pass') return `${name} pasó el turno`
+  return `${name} bajó ${action.tilesPlayed === 1 ? '1 ficha' : `${action.tilesPlayed} fichas`}`
+}
+
 export function Match(props: MatchProps) {
   const { room } = props
+  const { turn, lastAction } = room.game
   const key = `rummy.rack.${room.code}.${room.selfId}`
   const [order, setOrder] = useState(() => loadOrder(key))
   const [preferred, prefer] = useState<MeldKind>('set')
-  return <MatchTurn key={room.game.turn} {...props} order={order} preferred={preferred} prefer={prefer} remember={next => {
-    setOrder(next)
-    try { sessionStorage.setItem(key, JSON.stringify(next)) } catch { /* Private mode may disable storage. */ }
-  }} />
+  const [expiredTurn, setExpiredTurn] = useState<number | null>(null)
+  const action = lastAction && lastAction.playerId !== room.selfId && expiredTurn !== turn ? lastAction : null
+  const actor = action && room.players.find(player => player.id === action.playerId)
+  const notice = action && actor ? actionText(action, actor.name) : ''
+
+  useEffect(() => {
+    if (!action) return
+    const timeout = window.setTimeout(() => setExpiredTurn(turn), action.remainingMs)
+    return () => window.clearTimeout(timeout)
+  }, [action, turn])
+
+  return <>
+    <div className="sr-only" role="status">{notice}</div>
+    <MatchTurn key={turn} {...props} notice={notice} recentPlay={action?.kind === 'play' ? action : undefined}
+      order={order} preferred={preferred} prefer={prefer} remember={next => {
+        setOrder(next)
+        try { sessionStorage.setItem(key, JSON.stringify(next)) } catch { /* Private mode may disable storage. */ }
+      }} />
+  </>
 }

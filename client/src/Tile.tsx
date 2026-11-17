@@ -25,7 +25,7 @@ export function TileVisual({ tile, face }: { tile: TileData; face?: Face }) {
 export type DropTarget = MoveTarget
 
 export function Tile({
-  tile, face, zone, selected, editable, movingWithGroup, onClick,
+  tile, face, zone, selected, editable, movingWithGroup, recent, onClick,
 }: {
   tile: TileData
   face?: Face
@@ -33,6 +33,7 @@ export function Tile({
   selected: boolean
   editable: boolean
   movingWithGroup?: boolean
+  recent?: boolean
   onClick: () => void
 }) {
   const { setNodeRef, listeners, isDragging, attributes } = useDraggable({ id: tile.id, disabled: !editable })
@@ -42,12 +43,13 @@ export function Tile({
     disabled: !editable,
   })
   const label = tileName(tile, face)
-  if (!editable) return <span className="tile-static" role="img" aria-label={label} title={label}><TileVisual tile={tile} face={face} /></span>
+  const recentClass = recent ? ' tile-recent' : ''
+  if (!editable) return <span className={`tile-static${recentClass}`} role="img" aria-label={label} title={label}><TileVisual tile={tile} face={face} /></span>
   return (
     <button
       ref={node => { setNodeRef(node); setDropRef(node) }}
       type="button"
-      className={`tile-button ${selected ? 'tile-selected' : ''} ${isDragging || movingWithGroup ? 'tile-dragging' : ''} ${isOver && !isDragging ? 'tile-over' : ''}`}
+      className={`tile-button ${selected ? 'tile-selected' : ''} ${isDragging || movingWithGroup ? 'tile-dragging' : ''} ${isOver && !isDragging ? 'tile-over' : ''}${recentClass}`}
       aria-label={label}
       aria-describedby={attributes['aria-describedby']}
       aria-pressed={selected}
