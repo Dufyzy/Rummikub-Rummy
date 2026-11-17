@@ -8,7 +8,7 @@ function tile(color: Color, value: number, copy = 1): Tile {
 }
 
 const joker: Tile = { id: 'joker-1', color: 'joker', value: 0 }
-const spare = tile('orange', 2)
+const spare = tile('purple', 2)
 const blueRun = [tile('blue', 9), joker, tile('blue', 11)]
 const boundRun: Meld = { id: 1, tiles: blueRun, jokers: { [joker.id]: { color: 'blue', value: 10 } } }
 
@@ -34,6 +34,9 @@ test('deals 14 from a deck of 106 distinct tiles to each player', () => {
   assert.equal(deck.length, 106)
   assert.equal(new Set(deck.map(item => item.id)).size, 106)
   assert.equal(deck.filter(item => item.color === 'joker').length, 2)
+  for (const color of ['pink', 'purple', 'blue', 'black']) {
+    assert.equal(deck.filter(item => item.color === color).length, 26)
+  }
   for (const count of [2, 3, 4]) {
     const game = createGame(Array.from({ length: count }, (_, i) => ({ id: String(i), name: `Jugador ${i + 1}` })))
     assert.deepEqual(game.players.map(player => player.rack.length), Array(count).fill(14))
@@ -43,16 +46,16 @@ test('deals 14 from a deck of 106 distinct tiles to each player', () => {
 })
 
 test('sets accept three or four different colors with the same number', () => {
-  const set = [tile('red', 7), tile('blue', 7), tile('black', 7)]
+  const set = [tile('pink', 7), tile('blue', 7), tile('black', 7)]
   assert.equal(analyzeMeld(set)?.kind, 'set')
-  assert.equal(analyzeMeld([...set, tile('orange', 7)])?.points, 28)
-  assert.equal(analyzeMeld([...set, tile('red', 7, 2)]), null)
+  assert.equal(analyzeMeld([...set, tile('purple', 7)])?.points, 28)
+  assert.equal(analyzeMeld([...set, tile('pink', 7, 2)]), null)
   assert.equal(analyzeMeld([set[0], set[1], tile('black', 8)]), null)
   assert.equal(analyzeMeld(set.slice(0, 2)), null)
 })
 
 test('runs are ascending, consecutive and single-color, and cannot wrap at 13', () => {
-  const run = (...values: number[]) => values.map(value => tile('red', value))
+  const run = (...values: number[]) => values.map(value => tile('pink', value))
   assert.equal(analyzeMeld(run(1, 2, 3, 4, 5))?.kind, 'run')
   assert.equal(analyzeMeld(run(11, 12, 13))?.points, 36)
   assert.equal(analyzeMeld(run(12, 13, 1)), null)
@@ -69,19 +72,19 @@ test('opening counts the represented joker value and rejects fewer than 30 point
   assert.equal(accepted.data.players[0].opened, true)
   assert.equal(accepted.data.current, 1)
   const low = [tile('black', 8), joker, tile('black', 10)]
-  assert.deepEqual(analyzeMeld([tile('red', 10), tile('black', 10), joker])?.jokers, boundRun.jokers)
+  assert.deepEqual(analyzeMeld([tile('pink', 10), tile('black', 10), joker])?.jokers, boundRun.jokers)
   assert.match(errorOf(confirmTurn(fixture(low), place(low))), /27 puntos/)
   assert.equal(game.table.length, 0)
   assert.equal(game.players[0].rack.length, 4)
 })
 
 test('opening can combine multiple groups, and cannot touch the existing table', () => {
-  const red = [tile('red', 4), tile('red', 5), tile('red', 6)]
-  const orange = [tile('orange', 4), tile('orange', 5), tile('orange', 6)]
-  const game = fixture([...red, ...orange], [boundRun])
-  assert.match(errorOf(confirmTurn(game, [{ tile: red[0].id, to: 1 }])), /apertura/)
+  const pink = [tile('pink', 4), tile('pink', 5), tile('pink', 6)]
+  const purple = [tile('purple', 4), tile('purple', 5), tile('purple', 6)]
+  const game = fixture([...pink, ...purple], [boundRun])
+  assert.match(errorOf(confirmTurn(game, [{ tile: pink[0].id, to: 1 }])), /apertura/)
   assert.match(errorOf(confirmTurn(game, [{ tile: blueRun[0].id, to: 'new' }])), /apertura/)
-  const result = confirmTurn(game, [...place(red, 2), ...place(orange, 3)])
+  const result = confirmTurn(game, [...place(pink, 2), ...place(purple, 3)])
   assert.ok(result.ok)
   assert.deepEqual(result.data.table[0], boundRun)
   assert.deepEqual(result.data.end?.winners, ['first'])
@@ -100,17 +103,17 @@ test('validation rejects missing rack contribution, unknown tiles and incomplete
 
 test('a committed joker requires an exact replacement and must finish in another group', () => {
   const blue10 = tile('blue', 10)
-  const red10 = tile('red', 10)
-  const red11 = tile('red', 11)
-  const game = fixture([blue10, red10, red11], [boundRun], true)
+  const pink10 = tile('pink', 10)
+  const pink11 = tile('pink', 11)
+  const game = fixture([blue10, pink10, pink11], [boundRun], true)
   const swap = { tile: blue10.id, to: 1, anchor: joker.id }
   assert.match(errorOf(confirmTurn(game, [{ tile: joker.id, to: 'new' }])), /Sustituye/)
-  assert.match(errorOf(confirmTurn(game, [{ ...swap, tile: red10.id }, { tile: joker.id, to: 'new' }])), /no encaja/)
+  assert.match(errorOf(confirmTurn(game, [{ ...swap, tile: pink10.id }, { tile: joker.id, to: 'new' }])), /no encaja/)
   assert.match(errorOf(confirmTurn(game, [swap])), /Grupo 2/)
-  const result = confirmTurn(game, [swap, { tile: red10.id, to: 2 }, { tile: red11.id, to: 2 }])
+  const result = confirmTurn(game, [swap, { tile: pink10.id, to: 2 }, { tile: pink11.id, to: 2 }])
   assert.ok(result.ok)
   assert.deepEqual(result.data.table[0].tiles.map(item => item.id), [blueRun[0].id, blue10.id, blueRun[2].id])
-  assert.deepEqual(result.data.table[1].jokers, { [joker.id]: { value: 9, color: 'red' } })
+  assert.deepEqual(result.data.table[1].jokers, { [joker.id]: { value: 9, color: 'pink' } })
   assert.equal(result.data.end?.reason, 'empty-rack')
   const movedBack = confirmTurn(game, [
     swap, { tile: tile('blue', 11).id, to: 'new' }, { tile: joker.id, to: 1 },
@@ -131,18 +134,18 @@ test('opened players can split and extend groups with a tile from their rack', (
 })
 
 test('a group rejects incompatible additions immediately without changing the draft', () => {
-  const run = [3, 4, 5].map(value => tile('red', value))
-  const red6 = tile('red', 6)
-  const red7 = tile('red', 7)
+  const run = [3, 4, 5].map(value => tile('pink', value))
+  const pink6 = tile('pink', 6)
+  const pink7 = tile('pink', 7)
   const blue6 = tile('blue', 6)
-  const game = fixture([red6, red7, blue6], [{ id: 1, tiles: run, jokers: {} }], true)
-  for (const item of [blue6, red7]) {
+  const game = fixture([pink6, pink7, blue6], [{ id: 1, tiles: run, jokers: {} }], true)
+  for (const item of [blue6, pink7]) {
     const rejected = confirmTurn(game, [{ tile: item.id, to: 1 }])
     assert.ok(!rejected.ok)
     assert.deepEqual(rejected.error, { message: 'Esa ficha no encaja en el grupo 1.', groupId: 1 })
     assert.deepEqual(game.table[0].tiles, run)
   }
-  assert.ok(confirmTurn(game, [{ tile: red6.id, to: 1 }, { tile: red7.id, to: 1 }]).ok)
+  assert.ok(confirmTurn(game, [{ tile: pink6.id, to: 1 }, { tile: pink7.id, to: 1 }]).ok)
 })
 
 test('an incomplete run can be assembled around a gap but rejects an incompatible partial placement', () => {
@@ -156,7 +159,7 @@ test('an incomplete run can be assembled around a gap but rejects an incompatibl
 })
 
 test('a rack group is placed atomically and its identities and order are validated', () => {
-  const run = [10, 11, 12].map(value => tile('orange', value))
+  const run = [10, 11, 12].map(value => tile('purple', value))
   const ids = run.map(item => item.id)
   const game = fixture([...run, spare])
   const accepted = confirmTurn(game, [{ tiles: ids, to: 'new' }])
@@ -166,7 +169,7 @@ test('a rack group is placed atomically and its identities and order are validat
   assert.match(errorOf(confirmTurn(game, [{ tiles: [ids[0], ids[0], ids[2]], to: 'new' }])), /no está disponible/)
   assert.match(errorOf(confirmTurn(game, [{ tiles: ids.slice().reverse(), to: 'new' }])), /grupo válido/)
 
-  const onTable = [7, 8, 9].map(value => tile('orange', value))
+  const onTable = [7, 8, 9].map(value => tile('purple', value))
   const opened = fixture(run, [{ id: 1, tiles: onTable, jokers: {} }], true)
   const merged = confirmTurn(opened, [{ tiles: ids, to: 1 }])
   assert.ok(merged.ok)
@@ -175,14 +178,14 @@ test('a rack group is placed atomically and its identities and order are validat
 
 test('draw ends the turn; a full round of empty-pool passes ranks rack points and preserves ties', () => {
   const game = fixture([joker])
-  const drawn = drawOrPass({ ...game, pool: [tile('red', 1)] })
-  assert.deepEqual(drawn.players[0].rack, [joker, tile('red', 1)])
+  const drawn = drawOrPass({ ...game, pool: [tile('pink', 1)] })
+  assert.deepEqual(drawn.players[0].rack, [joker, tile('pink', 1)])
   assert.equal(drawn.current, 1)
   assert.equal(drawn.emptyPasses, 0)
   const passed = drawOrPass(drawn)
   assert.equal(passed.end, null)
   assert.deepEqual(drawOrPass(passed).end, { reason: 'blocked', winners: ['next'], points: { first: 31, next: 2 } })
-  assert.deepEqual(drawOrPass(drawOrPass(fixture([tile('red', 2)]))).end?.winners, ['first', 'next'])
+  assert.deepEqual(drawOrPass(drawOrPass(fixture([tile('pink', 2)]))).end?.winners, ['first', 'next'])
 })
 
 function errorOf(result: ReturnType<typeof confirmTurn>): string {

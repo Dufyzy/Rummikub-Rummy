@@ -506,10 +506,10 @@ button:disabled { cursor: not-allowed; opacity: .46; }
   color: var(--ink);
   user-select: none;
 }
-.tile-red { --tile-color: #a2212f; }
+.tile-pink { --tile-color: #d63886; }
 .tile-blue { --tile-color: #173f92; }
 .tile-black { --tile-color: #191d20; }
-.tile-orange { --tile-color: #a4440b; }
+.tile-purple { --tile-color: #702397; }
 .tile-joker { --tile-color: #795526; }
 .tile-value {
   color: var(--tile-color);
@@ -522,6 +522,7 @@ button:disabled { cursor: not-allowed; opacity: .46; }
 }
 .tile-dot { position: absolute; bottom: 12%; width: 19%; height: 2px; border-radius: 3px; background: #6c604b66; }
 .tile-binding { position: absolute; bottom: 3%; color: var(--tile-color); font-size: 10px; font-weight: 800; }
+.tile-binding.tile-pink { --tile-color: #b31b68; }
 .tile-button { padding: 0; border: 0; border-radius: 7px; touch-action: manipulation; cursor: grab !important; }
 .tile-button, .tile-static { user-select: none; -webkit-touch-callout: none; }
 .tile-button:hover .tile-face { background: linear-gradient(155deg, #fffdf1, #f6e7bc); }

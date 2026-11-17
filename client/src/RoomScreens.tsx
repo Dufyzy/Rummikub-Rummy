@@ -8,15 +8,15 @@ import { MessagePreview } from './MessagePreview'
 import type { IncomingMessage } from './roomSocial'
 
 const displaySet: Tile[] = [
-  { id: 'preview-red', color: 'red', value: 8 },
+  { id: 'preview-pink', color: 'pink', value: 8 },
   { id: 'preview-blue', color: 'blue', value: 8 },
   { id: 'preview-black', color: 'black', value: 8 },
 ]
 const displayRun: Tile[] = [
-  { id: 'preview-orange-10', color: 'orange', value: 10 },
-  { id: 'preview-orange-11', color: 'orange', value: 11 },
+  { id: 'preview-purple-10', color: 'purple', value: 10 },
+  { id: 'preview-purple-11', color: 'purple', value: 11 },
   { id: 'preview-joker', color: 'joker', value: 0 },
-  { id: 'preview-orange-13', color: 'orange', value: 13 },
+  { id: 'preview-purple-13', color: 'purple', value: 13 },
 ]
 
 export function ErrorNotice({ error }: { error: Problem | null }) {

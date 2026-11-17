@@ -2,7 +2,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { Sparkles } from 'lucide-react'
 import type { Face, MoveTarget, Tile as TileData } from '../../server/protocol'
 
-const colorNames = { red: 'rojo', blue: 'azul', black: 'negro', orange: 'naranja' }
+const colorNames = { pink: 'rosa', blue: 'azul', black: 'negro', purple: 'morado' }
 
 export function faceName(face: Face): string {
   return `${face.value} ${colorNames[face.color]}`

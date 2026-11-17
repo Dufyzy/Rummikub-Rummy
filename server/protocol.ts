@@ -1,4 +1,4 @@
-export const COLORS = ['red', 'blue', 'black', 'orange'] as const
+export const COLORS = ['pink', 'blue', 'black', 'purple'] as const
 export type Color = (typeof COLORS)[number]
 export type Face = { color: Color; value: number }
 export type Tile = { id: string } & (Face | { color: 'joker'; value: 0 })
