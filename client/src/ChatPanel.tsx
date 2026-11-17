@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { MessageCircle, Send, SmilePlus, X } from 'lucide-react'
 import { CHAT_TEXT_LIMIT, QUICK_REACTIONS, REACTIONS, type ChatMessage, type Problem, type ReactionKind } from '../../server/protocol'
 import { ReactionChoices, ReactionEmoji, reactionLabel } from './Reactions'
@@ -12,12 +12,13 @@ type ChatPanelProps = {
   selfId: string
   open: boolean
   ready: boolean
-  onClose: () => void
+  trigger: RefObject<HTMLButtonElement | null>
+  onClose: (returnFocus?: boolean) => void
   onSend: (text: string) => Promise<Problem | null>
   onReact: (kind: ReactionKind, messageId?: string) => Promise<Problem | null>
 }
 
-export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onReact }: ChatPanelProps) {
+export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onSend, onReact }: ChatPanelProps) {
   const [text, setText] = useState('')
   const [problem, setProblem] = useState<Problem | null>(null)
   const [sending, setSending] = useState(false)
@@ -25,6 +26,7 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
   const [picker, setPicker] = useState<string | null>(null)
   const panel = useRef<HTMLElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
+  const composer = useRef<HTMLInputElement>(null)
   const feed = useRef<HTMLDivElement>(null)
   const followLatest = useRef(true)
   const latestId = messages.at(-1)?.id
@@ -35,10 +37,22 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
     if (open && list && (followLatest.current || latestSender === selfId)) list.scrollTop = list.scrollHeight
   }, [open, latestId, latestSender, selfId])
 
+  useLayoutEffect(() => {
+    if (!open) return
+    const desktop = window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches
+    const target = desktop && composer.current && !composer.current.disabled ? composer.current : heading.current
+    target?.focus({ preventScroll: true })
+  }, [open])
+
   useEffect(() => {
     const element = panel.current
     if (!open || !element) return
-    heading.current?.focus({ preventScroll: true })
+    const dismissOutside = (event: MouseEvent) => {
+      const path = event.composedPath()
+      const control = trigger.current
+      if (path.includes(element) || (control && path.includes(control))) return
+      onClose(false)
+    }
     const viewport = window.visualViewport
     function fitViewport() {
       if (!viewport || !element) return
@@ -49,11 +63,13 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
     fitViewport()
     viewport?.addEventListener('resize', fitViewport)
     viewport?.addEventListener('scroll', fitViewport)
+    document.addEventListener('click', dismissOutside, true)
     return () => {
       viewport?.removeEventListener('resize', fitViewport)
       viewport?.removeEventListener('scroll', fitViewport)
+      document.removeEventListener('click', dismissOutside, true)
     }
-  }, [open])
+  }, [onClose, open, trigger])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -94,7 +110,7 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
       <div className="chat-heading">
         <div className="chat-heading-icon"><MessageCircle size={20} /></div>
         <h2 ref={heading} id="chat-title" tabIndex={-1}>Chat de la sala</h2>
-        <button type="button" className="button button-quiet icon-button" aria-label="Cerrar chat" onClick={onClose}><X size={20} /></button>
+        <button type="button" className="button button-quiet icon-button" aria-label="Cerrar chat" onClick={() => onClose()}><X size={20} /></button>
       </div>
       <div className="chat-feed" ref={feed} role="log" aria-label="Mensajes del chat" aria-relevant="additions" tabIndex={0}
         onScroll={event => {
@@ -141,7 +157,7 @@ export function ChatPanel({ messages, selfId, open, ready, onClose, onSend, onRe
         {!ready && <p className="muted chat-connection" role="status">Reconectando el chat…</p>}
         <form className="chat-form" onSubmit={event => void submit(event)}>
           <label className="sr-only" htmlFor="chat-message">Mensaje</label>
-          <input id="chat-message" type="text" value={text} maxLength={CHAT_TEXT_LIMIT} placeholder="Escribe un mensaje…"
+          <input ref={composer} id="chat-message" type="text" value={text} maxLength={CHAT_TEXT_LIMIT} placeholder="Escribe un mensaje…"
             autoComplete="off" disabled={!ready} onChange={event => setText(event.target.value)} />
           <button className="button button-primary icon-button" type="submit" aria-label="Enviar mensaje"
             disabled={!ready || sending || !text.trim()}><Send size={19} /></button>

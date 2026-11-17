@@ -69,9 +69,9 @@ export function App() {
   const commandPending = useRef(false)
   const rulesDialog = useRef<HTMLDialogElement>(null)
   const chatToggle = useRef<HTMLButtonElement>(null)
-  const closeChat = useCallback(() => {
+  const closeChat = useCallback((returnFocus = true) => {
     setChatOpen(false)
-    chatToggle.current?.focus({ preventScroll: true })
+    if (returnFocus) chatToggle.current?.focus({ preventScroll: true })
   }, [setChatOpen])
 
   useEffect(() => {
@@ -181,7 +181,7 @@ export function App() {
         : seat ? <main className="screen recovery" role="status">Recuperando tu asiento en {seat.code}…</main>
         : <Entry invite={invite} ready={ready} pending={pending} error={problem} onEnter={(name, code) => void enter(name, code)} />}
       {conversation && <ChatPanel key={`chat-${conversation.selfId}`} messages={conversation.messages} selfId={conversation.selfId} open={conversation.open}
-        ready={ready} onClose={closeChat} onSend={sendMessage} onReact={react} />}
+        trigger={chatToggle} ready={ready} onClose={closeChat} onSend={sendMessage} onReact={react} />}
       <div className="sr-only" role="status">
         {announcement && <span key={announcement.id}>{announcement.senderName} envió «{reactionLabel(announcement.kind)}».</span>}
       </div>
