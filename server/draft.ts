@@ -57,9 +57,10 @@ export function applyMove(draft: Draft, rules: TurnRules, move: Move): Result<Dr
   }
 
   const single = 'tile' in move ? tiles[0] : undefined
-  const ownBinding = single && rules.jokers.get(single.id)
-  if (single && ownBinding && !draft.freedJokers.has(single.id) && targetGroup?.id !== ownBinding.groupId) {
-    return failure('Sustituye el comodín por la ficha que indica antes de moverlo.', ownBinding.groupId)
+  const locked = lockedFaces(rules, draft.freedJokers)
+  const freedJokers = new Set(draft.freedJokers)
+  if (single && sourceGroup && sourceGroup !== targetGroup && locked.has(single.id)) {
+    freedJokers.add(single.id)
   }
 
   const anchoredTiles = targetGroup?.tiles ?? (move.to === 'rack' ? draft.rack : [])
@@ -72,7 +73,6 @@ export function applyMove(draft: Draft, rules: TurnRules, move: Move): Result<Dr
     ? { ...group, tiles: group.tiles.filter(item => !movedIds.has(item.id)) } : group)
   const target = targetGroup && table.find(group => group.id === targetGroup.id)
   let nextGroupId = draft.nextGroupId
-  const freedJokers = new Set(draft.freedJokers)
 
   if (move.to === 'new') {
     table.push({ id: nextGroupId++, tiles, jokers: {} })
@@ -80,9 +80,10 @@ export function applyMove(draft: Draft, rules: TurnRules, move: Move): Result<Dr
     const destination = target?.tiles ?? rack
     const anchorIndex = destination.findIndex(item => item.id === move.anchor)
     const anchor = destination[anchorIndex]
-    const binding = anchor && rules.jokers.get(anchor.id)
-    if (target && single && binding && !freedJokers.has(anchor.id)
-      && single.color === binding.face.color && single.value === binding.face.value) {
+    const face = anchor && locked.get(anchor.id)
+    if (target && single && single.color !== 'joker' && face
+      && ((single.color === face.color && single.value === face.value)
+        || analyzeMeld(destination.map(tile => tile === anchor ? single : tile), locked))) {
       destination.splice(anchorIndex, 1, single)
       freedJokers.add(anchor.id)
       table.push({ id: nextGroupId++, tiles: [anchor], jokers: {} })
@@ -93,9 +94,9 @@ export function applyMove(draft: Draft, rules: TurnRules, move: Move): Result<Dr
   }
 
   if (target && targetGroup) {
-    const wasComplete = analyzeMeld(targetGroup.tiles, lockedFaces(rules, draft.freedJokers))
-    const locked = lockedFaces(rules, freedJokers)
-    const fits = wasComplete ? analyzeMeld(target.tiles, locked) : couldCompleteMeld(target.tiles, locked)
+    const wasComplete = analyzeMeld(targetGroup.tiles, locked)
+    const remainingLocks = lockedFaces(rules, freedJokers)
+    const fits = wasComplete ? analyzeMeld(target.tiles, remainingLocks) : couldCompleteMeld(target.tiles, remainingLocks)
     if (!fits) {
       const label = single ? 'Esa ficha no encaja' : 'Esas fichas no encajan'
       return failure(`${label} en el grupo ${draft.table.indexOf(targetGroup) + 1}.`, target.id)

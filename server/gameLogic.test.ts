@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { applyMove, startDraft, turnRules } from './draft'
 import { analyzeMeld, confirmTurn, createDeck, createGame, drawOrPass, type Game } from './gameLogic'
 import type { Color, Meld, Move, Tile } from './protocol'
 
@@ -102,13 +103,12 @@ test('validation rejects missing rack contribution, unknown tiles and incomplete
   assert.match(result.error.message, /Grupo 2/)
 })
 
-test('a committed joker requires an exact replacement and must finish in another group', () => {
+test('a direct swap in the middle of a run needs the missing tile', () => {
   const blue10 = tile('blue', 10)
   const pink10 = tile('pink', 10)
   const pink11 = tile('pink', 11)
   const game = fixture([blue10, pink10, pink11], [boundRun], true)
   const swap = { tile: blue10.id, to: 1, anchor: joker.id }
-  assert.match(errorOf(confirmTurn(game, [{ tile: joker.id, to: 'new' }])), /Sustituye/)
   assert.match(errorOf(confirmTurn(game, [{ ...swap, tile: pink10.id }, { tile: joker.id, to: 'new' }])), /no encaja/)
   assert.match(errorOf(confirmTurn(game, [swap])), /Grupo 2/)
   const result = confirmTurn(game, [swap, { tile: pink10.id, to: 2 }, { tile: pink11.id, to: 2 }])
@@ -120,6 +120,61 @@ test('a committed joker requires an exact replacement and must finish in another
     swap, { tile: tile('blue', 11).id, to: 'new' }, { tile: joker.id, to: 1 },
   ])
   assert.match(errorOf(movedBack), /otro grupo/)
+})
+
+test('a joker can leave its original run incomplete until turn confirmation', () => {
+  const blue10 = tile('blue', 10)
+  const [pink10, pink11] = [tile('pink', 10), tile('pink', 11)]
+  const game = fixture([blue10, pink10, pink11], [boundRun], true)
+  const remove: Move = { tile: joker.id, to: 'new' }
+  const draft = applyMove(startDraft(game.table, game.players[0].rack), turnRules(game.table, true), remove)
+  assert.ok(draft.ok)
+  assert.deepEqual(draft.data.table.map(group => group.tiles), [[blueRun[0], blueRun[2]], [joker]])
+
+  const reuse: Move[] = [remove, { tile: pink10.id, to: 2 }, { tile: pink11.id, to: 2 }]
+  assert.match(errorOf(confirmTurn(game, reuse)), /Grupo 1: debe tener al menos 3 fichas/)
+  const result = confirmTurn(game, [...reuse, { tile: blue10.id, to: 1, anchor: blueRun[2].id, side: 'before' }])
+  assert.ok(result.ok)
+  assert.deepEqual(result.data.table[0].tiles, [blueRun[0], blue10, blueRun[2]])
+  assert.deepEqual(result.data.table[1].jokers, { [joker.id]: { color: 'pink', value: 9 } })
+})
+
+test('a set joker can be recovered using a different valid color', () => {
+  const purple13 = tile('purple', 13)
+  const blue13 = tile('blue', 13)
+  const black13 = tile('black', 13)
+  const duplicateBlue13 = tile('blue', 13, 2)
+  const [pink10, pink11] = [tile('pink', 10), tile('pink', 11)]
+  const set: Meld = { id: 1, tiles: [joker, purple13, blue13], jokers: { [joker.id]: { color: 'pink', value: 13 } } }
+  const game = fixture([black13, duplicateBlue13, pink10, pink11], [set], true)
+
+  assert.match(errorOf(confirmTurn(game, [{ tile: duplicateBlue13.id, to: 1, anchor: joker.id }])), /no encaja/)
+
+  const recoveries: Move[][] = [
+    [{ tile: black13.id, to: 1 }, { tile: joker.id, to: 'new' }],
+    [{ tile: black13.id, to: 1, anchor: joker.id }],
+  ]
+  for (const moves of recoveries) {
+    const result = confirmTurn(game, [...moves, { tile: pink10.id, to: 2 }, { tile: pink11.id, to: 2 }])
+    assert.ok(result.ok)
+    assert.deepEqual(new Set(result.data.table[0].tiles), new Set([purple13, blue13, black13]))
+    assert.deepEqual(result.data.table[0].jokers, {})
+    assert.deepEqual(result.data.table[1].jokers, { [joker.id]: { color: 'pink', value: 9 } })
+    assert.deepEqual(result.data.players[0].rack, [duplicateBlue13])
+  }
+})
+
+test('the joker can leave a four-tile set without a replacement', () => {
+  const thirteens = [tile('purple', 13), tile('blue', 13), tile('black', 13)]
+  const set: Meld = { id: 1, tiles: [joker, ...thirteens], jokers: { [joker.id]: { color: 'pink', value: 13 } } }
+  const [pink10, pink11] = [tile('pink', 10), tile('pink', 11)]
+  const game = fixture([pink10, pink11], [set], true)
+  const remove: Move = { tile: joker.id, to: 'new' }
+  assert.match(errorOf(confirmTurn(game, [remove])), /Grupo 2: debe tener al menos 3 fichas/)
+  const result = confirmTurn(game, [remove, { tile: pink10.id, to: 2 }, { tile: pink11.id, to: 2 }])
+  assert.ok(result.ok)
+  assert.deepEqual(result.data.table[0], { id: 1, tiles: thirteens, jokers: {} })
+  assert.deepEqual(result.data.table[1].jokers, { [joker.id]: { color: 'pink', value: 9 } })
 })
 
 test('opened players can split and extend groups with a tile from their rack', () => {
