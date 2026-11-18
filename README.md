@@ -13,8 +13,8 @@ Juego de fichas inspirado en Rummikub para **2 a 4 personas**, en tiempo real y 
 **Requisitos:** Git y Docker con el comando `docker compose` disponible. Si ya clonaste el repositorio, omite los dos primeros comandos y ejecuta el tercero desde la raíz del proyecto.
 
 ```sh
-git clone https://github.com/Dufyzy/Rummy.git
-cd Rummy
+git clone https://github.com/Dufyzy/Rummikub-Rummy.git
+cd Rummikub-Rummy
 docker compose up -d --build
 ```
 
