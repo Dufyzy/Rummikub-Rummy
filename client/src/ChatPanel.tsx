@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type PointerEvent, type RefObject } from 'react'
 import { MessageCircle, Send, SmilePlus, X } from 'lucide-react'
 import { CHAT_TEXT_LIMIT, QUICK_REACTIONS, REACTIONS, type ChatMessage, type Problem, type ReactionKind } from '../../server/protocol'
 import { ReactionChoices, ReactionEmoji, reactionLabel } from './Reactions'
@@ -6,6 +6,10 @@ import { ErrorNotice } from './RoomScreens'
 import './ChatPanel.css'
 
 const timeFormat = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' })
+const REACTION_HOLD_MS = 500
+const REACTION_MOVE_TOLERANCE = 10
+
+type ReactionPress = { pointerId: number; startX: number; startY: number; timer: number }
 
 type ChatPanelProps = {
   messages: ChatMessage[]
@@ -28,14 +32,36 @@ export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onS
   const heading = useRef<HTMLHeadingElement>(null)
   const composer = useRef<HTMLInputElement>(null)
   const feed = useRef<HTMLDivElement>(null)
+  const press = useRef<ReactionPress | null>(null)
+  const pickerTrigger = useRef<HTMLButtonElement | null>(null)
+  const pickerOptions = useRef<HTMLDivElement>(null)
   const followLatest = useRef(true)
   const latestId = messages.at(-1)?.id
   const latestSender = messages.at(-1)?.senderId
+
+  const cancelPress = useCallback(() => {
+    if (!press.current) return
+    window.clearTimeout(press.current.timer)
+    press.current = null
+  }, [])
+
+  useEffect(() => {
+    if (!open || !ready) return
+    window.addEventListener('blur', cancelPress)
+    return () => {
+      window.removeEventListener('blur', cancelPress)
+      cancelPress()
+    }
+  }, [cancelPress, open, ready])
 
   useLayoutEffect(() => {
     const list = feed.current
     if (open && list && (followLatest.current || latestSender === selfId)) list.scrollTop = list.scrollHeight
   }, [open, latestId, latestSender, selfId])
+
+  useLayoutEffect(() => {
+    if (open && picker) pickerOptions.current?.scrollIntoView({ block: 'nearest' })
+  }, [open, picker])
 
   useLayoutEffect(() => {
     if (!open) return
@@ -71,6 +97,40 @@ export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onS
     }
   }, [onClose, open, trigger])
 
+  function showPicker(messageId: string, control: HTMLButtonElement) {
+    pickerTrigger.current = control
+    setPicker(messageId)
+  }
+
+  function closePicker() {
+    if (pickerOptions.current?.contains(document.activeElement)) pickerTrigger.current?.focus({ preventScroll: true })
+    setPicker(null)
+  }
+
+  function startPress(event: PointerEvent<HTMLButtonElement>, messageId: string) {
+    if (!event.isPrimary || event.button !== 0) return
+    cancelPress()
+    const { pointerId, clientX, clientY, currentTarget } = event
+    currentTarget.setPointerCapture(pointerId)
+    press.current = {
+      pointerId, startX: clientX, startY: clientY,
+      timer: window.setTimeout(() => {
+        press.current = null
+        if (currentTarget.isConnected) showPicker(messageId, currentTarget)
+      }, REACTION_HOLD_MS),
+    }
+  }
+
+  function movePress(event: PointerEvent<HTMLButtonElement>) {
+    const active = press.current
+    if (active?.pointerId !== event.pointerId) return
+    if (Math.hypot(event.clientX - active.startX, event.clientY - active.startY) > REACTION_MOVE_TOLERANCE) cancelPress()
+  }
+
+  function endPress(event: PointerEvent<HTMLButtonElement>) {
+    if (press.current?.pointerId === event.pointerId) cancelPress()
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!ready || sending || !text.trim()) return
@@ -93,7 +153,7 @@ export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onS
     try {
       const result = await onReact(kind, messageId)
       if (result) setProblem(result)
-      else if (messageId) setPicker(null)
+      else if (messageId && pickerOptions.current?.dataset.messageId === messageId) closePicker()
     } finally {
       setReacting(false)
     }
@@ -104,7 +164,7 @@ export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onS
       onKeyDown={event => {
         if (event.key !== 'Escape') return
         event.stopPropagation()
-        if (picker) setPicker(null)
+        if (picker) closePicker()
         else onClose()
       }}>
       <div className="chat-heading">
@@ -114,19 +174,35 @@ export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onS
       </div>
       <div className="chat-feed" ref={feed} role="log" aria-label="Mensajes del chat" aria-relevant="additions" tabIndex={0}
         onScroll={event => {
+          cancelPress()
           const list = event.currentTarget
           followLatest.current = list.scrollHeight - list.scrollTop - list.clientHeight < 30
         }}>
         {!messages.length && <p className="chat-empty muted">Todavía no hay mensajes.</p>}
         {messages.map(message => {
           const own = message.senderId === selfId
+          const latest = message.id === latestId
+          const pickerOpen = message.id === picker
           return (
             <article className={`chat-message ${own ? 'chat-own-message' : ''}`} key={message.id}>
               <div className="chat-message-meta">
                 <strong>{own ? 'Tú' : message.senderName}</strong>
                 <time dateTime={new Date(message.sentAt).toISOString()}>{timeFormat.format(message.sentAt)}</time>
               </div>
-              <p className="chat-bubble">{message.text}</p>
+              {latest ? <p className="chat-bubble">{message.text}</p> : (
+                <button className="chat-bubble chat-hold-reaction" type="button" aria-expanded={pickerOpen}
+                  aria-label={`Reaccionar a: ${message.text}`} title="Mantén pulsado para reaccionar" disabled={!ready}
+                  onPointerDown={event => startPress(event, message.id)} onPointerMove={movePress}
+                  onPointerUp={endPress} onPointerCancel={endPress} onLostPointerCapture={endPress}
+                  onContextMenu={event => event.preventDefault()}
+                  onClick={event => {
+                    if (event.detail !== 0) return
+                    if (pickerOpen) closePicker()
+                    else showPicker(message.id, event.currentTarget)
+                  }}>
+                  {message.text}
+                </button>
+              )}
               <div className="chat-message-reactions">
                 {REACTIONS.map(kind => {
                   const users = message.reactions[kind]
@@ -138,12 +214,17 @@ export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onS
                     </button>
                   ) : null
                 })}
-                <button className="chat-add-reaction" type="button" aria-label={`Reaccionar al mensaje de ${own ? 'ti' : message.senderName}`}
-                  aria-expanded={picker === message.id} disabled={!ready} onClick={() => setPicker(picker === message.id ? null : message.id)}>
-                  <SmilePlus size={16} />
-                </button>
+                {latest && (
+                  <button className="chat-add-reaction" type="button" aria-label={`Reaccionar al mensaje de ${own ? 'ti' : message.senderName}`}
+                    aria-expanded={pickerOpen} disabled={!ready}
+                    onClick={event => pickerOpen ? closePicker() : showPicker(message.id, event.currentTarget)}>
+                    <SmilePlus size={16} />
+                  </button>
+                )}
               </div>
-              {picker === message.id && <ReactionChoices disabled={!ready || reacting} onChoose={kind => void choose(kind, message.id)} />}
+              {pickerOpen && <div ref={pickerOptions} data-message-id={message.id}>
+                <ReactionChoices disabled={!ready || reacting} onChoose={kind => void choose(kind, message.id)} />
+              </div>}
             </article>
           )
         })}

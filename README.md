@@ -81,7 +81,9 @@ Después de abrir, puedes recuperar un **comodín** de la mesa colocando sobre �
 
 ### Chat y sonido
 
-Abre **Chat** en la sala de espera o en la mesa. Puedes enviar mensajes, reaccionar a ellos o lanzar una reacción rápida que aparece junto a tu nombre. Con el chat cerrado, los mensajes nuevos se muestran brevemente junto al remitente y el botón indica cuántos quedan sin leer. La sala conserva los últimos 80 mensajes. Usa el icono de altavoz para activar o silenciar los avisos de chat y de turno.
+Abre **Chat** en la sala de espera o en la mesa. El botón de reacción aparece en el último mensaje; para reaccionar a uno anterior, mantén pulsada su burbuja. Con teclado, enfoca la burbuja y pulsa **Enter** o **Espacio**. También puedes lanzar una reacción rápida que aparece junto a tu nombre.
+
+Con el chat cerrado, los mensajes nuevos se muestran brevemente junto al remitente y el botón indica cuántos quedan sin leer. La sala conserva los últimos 80 mensajes. Usa el icono de altavoz para activar o silenciar los avisos de chat y de turno.
 
 ## Capturas
 
