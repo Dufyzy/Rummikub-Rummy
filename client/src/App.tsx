@@ -47,7 +47,7 @@ function RulesDialog({ dialog }: { dialog: React.RefObject<HTMLDialogElement | n
         <dt>Escalera</dt>
         <dd>Tres o más fichas consecutivas del mismo color, de menor a mayor. El 1 va antes del 2.</dd>
         <dt>Comodín</dt>
-        <dd>Vale lo mismo que la ficha que representa. Tras abrir, coloca la ficha indicada encima del comodín para recuperarlo y úsalo en otro grupo en ese turno.</dd>
+        <dd>Vale lo mismo que la ficha que representa. Tras abrir, puedes moverlo o colocar encima una ficha que encaje en su lugar. Antes de confirmar, úsalo en otro grupo y asegúrate de que toda la mesa quede en grupos válidos.</dd>
         <dt>Tu turno</dt>
         <dd>Selecciona una ficha y pulsa su destino. También puedes arrastrarla. En una pantalla táctil mantén pulsada la ficha para arrastrar y desliza enseguida para desplazarte. Confirma una jugada con al menos una ficha de tu atril, o roba y cede el turno.</dd>
         <dt>Mover varias fichas juntas</dt>

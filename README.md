@@ -46,7 +46,7 @@ docker compose --profile internet stop tunnel
 3. Durante tu turno, selecciona una ficha y pulsa su destino o arrástrala. Un arrastre rápido mueve una sola ficha. Una pulsación más larga permite arrastrar el grupo válido que la incluye. Puedes hacer lo mismo al tocar una ficha y elegir **Bajar fichas juntas**. Ordenar por número prioriza tríos y cuartetos, y ordenar por color prioriza escaleras. En el teléfono, mantén una pulsación breve para arrastrar una ficha y desliza enseguida para recorrer un atril largo.
 4. Coloca las escaleras en orden ascendente. El juego mantiene cada ficha en su sitio si el destino es incompatible. Cuando creas un grupo, puedes dejar espacios para completar la escalera.
 5. Para abrir, baja al menos 30 puntos en grupos formados desde tu atril. A partir del turno siguiente puedes reorganizar la mesa.
-6. Para recuperar un comodín, coloca sobre él la ficha del número y color indicados. El comodín pasa a un grupo provisional. Inclúyelo en otro grupo válido antes de confirmar.
+6. Para recuperar un comodín, muévelo o coloca encima una ficha que encaje en su lugar. Antes de confirmar, úsalo en otro grupo y deja toda la mesa en grupos válidos.
 7. **Confirmar jugada** publica la mesa validada. **Reiniciar turno** restaura la mesa y el orden del atril al comienzo del turno. **Robar ficha** descarta el borrador, añade una ficha y cede el turno.
 
 Con el pozo vacío, **Pasar** indica que el jugador no hará una jugada. Una ronda completa de pasos consecutivos cierra la partida por puntos del atril. Cada comodín restante vale 30 puntos y, si hay igualdad en el mínimo, la victoria es compartida. [Reglas de Rummikub Classic](https://rummikub.com/wp-content/uploads/2025/06/4600-0236-0013-EN-_rummikub-Classic.pdf)
