@@ -55,6 +55,15 @@ Abre la URL `https://….trycloudflare.com` de los logs y comparte la invitació
 
 > **Estado en memoria:** no hay base de datos. Si reinicias el servidor, se pierden las salas, las partidas y el chat. Si solo recargas la misma pestaña, el juego puede recuperar tu asiento con `sessionStorage` mientras la sala y el asiento sigan activos.
 
+### Publicar gratis en Render
+
+1. Sube a GitHub la rama que contiene `render.yaml`.
+2. En [Render](https://dashboard.render.com/), elige **New → Blueprint**, conecta el repositorio y selecciona esa rama.
+3. Comprueba que la vista previa muestre un único servicio web con el plan **Free** y pulsa **Deploy Blueprint**.
+4. Abre el enlace HTTPS `onrender.com` que te da Render. Crea una sala desde esa dirección y comparte la invitación.
+
+El servicio sirve el cliente y Socket.IO desde la misma URL. El plan gratuito se suspende tras 15 minutos sin tráfico entrante. Al volver a abrir el juego, el arranque puede tardar alrededor de un minuto. Las salas y partidas se pierden cuando el servidor se detiene o se vuelve a desplegar. Consulta los [límites del plan gratuito](https://render.com/docs/free).
+
 ## Cómo jugar
 
 1. **Crea la sala.** Escribe tu nombre, pulsa **Crear sala** y comparte el enlace o el código de cinco letras. El anfitrión pulsa **Iniciar partida** cuando haya al menos dos personas conectadas.

@@ -1,5 +1,6 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
+import { resolve } from 'node:path'
 import express from 'express'
 import { Server, type Socket } from 'socket.io'
 import { confirmTurn, createGame, drawOrPass, type Game } from './gameLogic'
@@ -25,6 +26,9 @@ type Membership = { room: Room; player: Player }
 const app = express()
 app.disable('x-powered-by')
 app.get('/health', (_request, response) => response.json({ status: 'ok' }))
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(resolve(__dirname, '../../client/dist')))
+}
 const http = createServer(app)
 const io = new Server<ClientEvents, ServerEvents, Record<string, never>, SocketData>(http, {
   maxHttpBufferSize: 256_000,
