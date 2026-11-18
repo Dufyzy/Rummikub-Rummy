@@ -140,6 +140,7 @@
   border-top: 1px solid #62766761;
   background: #203228;
 }
+.chat-footer .error-notice { max-height: 4rem; overflow: auto; overflow-wrap: anywhere; }
 .chat-quick { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .chat-panel[data-compact="true"] .chat-quick { display: none; }
 .chat-quick h3 { color: #e0e9de; font-size: 12px; line-height: 1.3; font-weight: 650; }

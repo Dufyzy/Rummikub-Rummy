@@ -135,12 +135,18 @@ export function ChatPanel({ messages, selfId, open, ready, trigger, onClose, onS
     event.preventDefault()
     if (!ready || sending || !text.trim()) return
     const submitted = text
+    setText('')
     setProblem(null)
     setSending(true)
+    composer.current?.focus({ preventScroll: true })
     try {
       const result = await onSend(submitted)
-      if (result) setProblem(result)
-      else setText(current => current === submitted ? '' : current)
+      if (result) {
+        setProblem(composer.current?.value
+          ? { ...result, message: `${result.message} Mensaje: «${submitted}»` }
+          : result)
+        setText(current => current || submitted)
+      }
     } finally {
       setSending(false)
     }
