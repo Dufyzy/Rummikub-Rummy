@@ -605,6 +605,14 @@ button:disabled { cursor: not-allowed; opacity: .46; }
 .rules-title svg, .rules-dialog dt { color: var(--gold); }
 .rules-dialog dt { font-size: 14px; font-weight: 720; }
 .rules-dialog dd { color: #e1e9df; font-size: 14px; line-height: 1.55; margin: 3px 0 11px; }
+.rules-dedication {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
 
 @media (max-width: 880px) {
   .entry, .lobby { gap: 30px; }

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: rummy
+    runtime: node
+    plan: free
+    buildCommand: >-
+      npm --prefix client ci --include=dev && npm --prefix server ci --include=dev &&
+      npm --prefix client run build && npm --prefix server run build
+    startCommand: npm --prefix server start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '22.x'
+      - key: NODE_ENV
+        value: production

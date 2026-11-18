@@ -55,6 +55,7 @@ function RulesDialog({ dialog }: { dialog: React.RefObject<HTMLDialogElement | n
         <dt>Victoria</dt>
         <dd>Gana quien vacía su atril. Con el pozo vacío, si todos pasan en una ronda, gana quien tenga menos puntos. Cada comodín en el atril vale 30 puntos.</dd>
       </dl>
+      <p className="rules-dedication">Hecho para jugar con Hanni</p>
     </dialog>
   )
 }

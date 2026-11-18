@@ -2,6 +2,8 @@
 
 Juego de fichas inspirado en Rummikub para **2 a 4 personas**, en tiempo real y desde el navegador. Crea una sala, comparte el código o enlace y juega desde una computadora o un teléfono. No hace falta crear una cuenta.
 
+**[Jugar Rummy en línea](https://rummy-253i.onrender.com/)**
+
 [Arranque rápido](#arranque-rápido) · [Cómo jugar](#cómo-jugar) · [Capturas](#capturas) · [Stack y arquitectura](#stack-y-arquitectura) · [Desarrollo](#desarrollo)
 
 ![Mesa de Rummy en escritorio con una apertura de tres fichas de valor 10, el pozo y el atril del jugador](docs/capturas/partida.png)
@@ -54,6 +56,15 @@ Abre la URL `https://….trycloudflare.com` de los logs y comparte la invitació
 - Detener todo, incluido el túnel: `docker compose --profile internet down`.
 
 > **Estado en memoria:** no hay base de datos. Si reinicias el servidor, se pierden las salas, las partidas y el chat. Si solo recargas la misma pestaña, el juego puede recuperar tu asiento con `sessionStorage` mientras la sala y el asiento sigan activos.
+
+### Publicar gratis en Render
+
+1. Sube a GitHub la rama que contiene `render.yaml`.
+2. En [Render](https://dashboard.render.com/), elige **New → Blueprint**, conecta el repositorio y selecciona esa rama.
+3. Comprueba que la vista previa muestre un único servicio web con el plan **Free** y pulsa **Deploy Blueprint**.
+4. Abre el enlace HTTPS `onrender.com` que te da Render. Crea una sala desde esa dirección y comparte la invitación.
+
+El servicio sirve el cliente y Socket.IO desde la misma URL. El plan gratuito se suspende tras 15 minutos sin tráfico entrante. Al volver a abrir el juego, el arranque puede tardar alrededor de un minuto. Las salas y partidas se pierden cuando el servidor se detiene o se vuelve a desplegar. Consulta los [límites del plan gratuito](https://render.com/docs/free).
 
 ## Cómo jugar
 
